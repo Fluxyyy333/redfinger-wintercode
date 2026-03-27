@@ -94,7 +94,7 @@ ok "Modules installed."
 
 # Run 2: actual run with key
 run "Start agent dengan key..."
-echo "$SCRIPT_KEY" | lua "$AGENT_PATH" 2>&1 | tee -a "$LOG"
+printf '%s\n' "$SCRIPT_KEY" | lua "$AGENT_PATH" 2>&1 | tee -a "$LOG"
 sleep 3
 [ -d "$HOME/.winterhub" ] && ok "Agent config OK." || err "Config belum ada. Cek manual."
 AGENT_PID=$(pgrep -f "lua.*agent" 2>/dev/null | head -1)
