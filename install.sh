@@ -15,43 +15,7 @@ echo "=== INSTALL: $(date) ===" > "$LOG"
 ok()  { echo -e "  ${G}✓${R} $1" | tee -a "$LOG"; }
 err() { echo -e "  ${E}✗${R} $1" | tee -a "$LOG"; }
 run() { echo -e "  ${Y}>${R} $1" | tee -a "$LOG"; }
-die() { echo -e "\n  ${E}FATAL: $1${R}\n" | tee -a "$LOG"; exit 1; }
 
-pkg_installed() { dpkg -l "$1" 2>/dev/null | grep -q "^ii"; }
-
-install_pkg() {
-  local pkg="$1"
-  pkg_installed "$pkg" && { ok "$pkg sudah ada."; return 0; }
-
-  # Attempt 1: langsung pkg install
-  run "pkg install $pkg..."
-  timeout 120 pkg install -y "$pkg" >> "$LOG" 2>&1
-  pkg_installed "$pkg" && { ok "$pkg OK."; return 0; }
-
-  # Attempt 2: ganti repo lalu retry
-  run "$pkg gagal, ganti repo & retry..."
-  echo 'deb https://packages-cf.termux.dev/apt/termux-main stable main' > "$PREFIX/etc/apt/sources.list"
-  timeout 60 pkg update -y >> "$LOG" 2>&1
-  timeout 120 pkg install -y "$pkg" >> "$LOG" 2>&1
-  pkg_installed "$pkg" && { ok "$pkg OK (retry)."; return 0; }
-
-  err "$pkg gagal install."
-  err "Jalankan 'termux-change-repo' lalu 'pkg install $pkg' manual."
-  return 1
-}
-
-dl() {
-  local dest="$1" url="$2" label="$3"
-  for i in 1 2 3; do
-    run "Download $label ($i/3)..."
-    curl -fsSL --retry 2 --max-time 30 "$url" -o "$dest" 2>> "$LOG"
-    [ -s "$dest" ] && { ok "OK: $label"; return 0; }
-    sleep 2
-  done
-  die "Gagal download $label!"
-}
-
-# ══════════════════════════════════════
 echo -e "\n${C}  REDFINGER INSTALLER${R}"
 echo -e "${C}  Wintercode Agent + Optimizer${R}\n"
 
@@ -61,7 +25,7 @@ if [ -n "$1" ]; then
   SCRIPT_KEY="$1"
   ok "Key diterima dari argumen."
 else
-  echo -e "  ${Y}Masukkan script key (32 hex):${R} "
+  echo -ne "  ${Y}Masukkan script key (32 hex):${R} "
   read -r SCRIPT_KEY
 fi
 echo "SCRIPT_KEY=$SCRIPT_KEY" > "$CONFIG"
@@ -70,27 +34,37 @@ ok "Key tersimpan."
 
 # ── [2/7] Root ────────────────────────
 echo -e "\n  ${W}[2/7] Cek Root${R}"
-run "su -c id..."
-su -c "id" > /dev/null 2>&1 || die "ROOT GAGAL. Pastikan root aktif."
+su -c "id" > /dev/null 2>&1 || { err "ROOT GAGAL."; exit 1; }
 ok "Root aktif."
 
 # ── [3/7] Packages ────────────────────
 echo -e "\n  ${W}[3/7] Install Paket${R}"
-run "pkg update..."
-timeout 90 pkg update -y >> "$LOG" 2>&1 && ok "pkg update OK." || err "pkg update gagal (lanjut...)"
-run "pkg upgrade..."
-timeout 300 pkg upgrade -y >> "$LOG" 2>&1 && ok "pkg upgrade OK." || err "pkg upgrade partial (lanjut...)"
-for pkg in lua53 tsu termux-boot; do
-  install_pkg "$pkg"
-done
+run "pkg update & upgrade..."
+pkg update -y 2>&1 | tee -a "$LOG"
+pkg upgrade -y 2>&1 | tee -a "$LOG"
+run "pkg install lua53 tsu termux-boot..."
+pkg install -y lua53 tsu termux-boot 2>&1 | tee -a "$LOG"
+
+# Verify
+if command -v lua > /dev/null 2>&1; then
+  ok "lua53 OK: $(lua -v 2>&1 | head -1)"
+else
+  err "lua53 GAGAL. Coba manual:"
+  err "  termux-change-repo"
+  err "  pkg install lua53"
+  exit 1
+fi
 
 # ── [4/7] Download Scripts ────────────
 echo -e "\n  ${W}[4/7] Download Scripts${R}"
 mkdir -p "$HOME/scripts" "$HOME/.termux/boot"
-dl "$HOME/.termux/boot/autorun.sh"   "$BASE_URL/autorun.sh"           "autorun.sh"
-dl "$HOME/scripts/optimize_rf.sh"    "$BASE_URL/scripts/optimize_rf.sh"  "optimize_rf.sh"
-dl "$HOME/scripts/debloat_rf.sh"     "$BASE_URL/scripts/debloat_rf.sh"   "debloat_rf.sh"
-dl "$HOME/scripts/oom_watcher.sh"    "$BASE_URL/scripts/oom_watcher.sh"  "oom_watcher.sh"
+for f in autorun.sh scripts/optimize_rf.sh scripts/debloat_rf.sh scripts/oom_watcher.sh; do
+  run "Download $f..."
+  curl -fsSL --retry 3 "$BASE_URL/$f" -o "$HOME/$f" 2>> "$LOG"
+  [ -s "$HOME/$f" ] && ok "$f" || err "GAGAL: $f"
+done
+# autorun.sh goes to boot dir
+mv "$HOME/autorun.sh" "$HOME/.termux/boot/autorun.sh" 2>/dev/null
 chmod +x "$HOME/.termux/boot/autorun.sh" "$HOME/scripts/"*.sh
 ok "Semua script siap."
 
@@ -105,22 +79,19 @@ ok "Optimasi selesai."
 
 # ── [6/7] Wintercode Agent ────────────
 echo -e "\n  ${W}[6/7] Wintercode Agent${R}"
-dl "$AGENT_PATH" "$AGENT_URL" "agent.lua"
-run "First-run agent (input key)..."
-echo "$SCRIPT_KEY" | lua "$AGENT_PATH" >> "$LOG" 2>&1
+run "Download agent.lua..."
+curl -L -o "$AGENT_PATH" "$AGENT_URL" 2>&1 | tee -a "$LOG"
+[ -s "$AGENT_PATH" ] || { err "Download agent gagal."; exit 1; }
+ok "agent.lua downloaded."
+run "First-run agent..."
+echo "$SCRIPT_KEY" | lua "$AGENT_PATH" 2>&1 | tee -a "$LOG"
 sleep 3
-if [ -d "$HOME/.winterhub" ]; then
-  ok "Agent tersetup. Config: ~/.winterhub/"
-else
-  err "Agent mungkin belum tersimpan config. Cek manual."
-fi
-# Agent sudah jalan di background dari first-run
+[ -d "$HOME/.winterhub" ] && ok "Agent config OK." || err "Config belum ada. Cek manual."
 AGENT_PID=$(pgrep -f "lua.*agent" 2>/dev/null | head -1)
-[ -n "$AGENT_PID" ] && ok "Agent berjalan (PID: $AGENT_PID)" || err "Agent tidak terdeteksi. Cek: lua $AGENT_PATH </dev/null"
+[ -n "$AGENT_PID" ] && ok "Agent running (PID: $AGENT_PID)" || err "Agent tidak jalan. Run manual: lua $AGENT_PATH </dev/null"
 
 # ── [7/7] OOM Watcher ─────────────────
 echo -e "\n  ${W}[7/7] OOM Watcher${R}"
-run "Start oom_watcher..."
 bash "$HOME/scripts/oom_watcher.sh" >> "$HOME/oom_watcher.log" 2>&1 &
 ok "OOM watcher aktif (PID: $!)"
 
