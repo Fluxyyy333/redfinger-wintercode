@@ -92,9 +92,15 @@ lua "$AGENT_PATH" </dev/null >> "$LOG" 2>&1
 sleep 2
 ok "Modules installed."
 
-# Run 2: actual run with key
-run "Start agent dengan key..."
-printf '%s\n' "$SCRIPT_KEY" | lua "$AGENT_PATH" 2>&1 | tee -a "$LOG"
+# Inject key langsung ke ~/.winterhub/key.txt
+run "Inject script key..."
+mkdir -p "$HOME/.winterhub"
+printf '%s' "$SCRIPT_KEY" > "$HOME/.winterhub/key.txt"
+ok "Key tersimpan di ~/.winterhub/key.txt"
+
+# Run 2: actual run (baca key dari file)
+run "Start agent..."
+lua "$AGENT_PATH" </dev/null 2>&1 | tee -a "$LOG"
 sleep 3
 [ -d "$HOME/.winterhub" ] && ok "Agent config OK." || err "Config belum ada. Cek manual."
 AGENT_PID=$(pgrep -f "lua.*agent" 2>/dev/null | head -1)
