@@ -85,7 +85,15 @@ run "Download agent.lua..."
 curl -L -o "$AGENT_PATH" "$AGENT_URL" 2>&1 | tee -a "$LOG"
 [ -s "$AGENT_PATH" ] || { err "Download agent gagal."; exit 1; }
 ok "agent.lua downloaded."
-run "First-run agent..."
+
+# Run 1: install modules (cjson dll)
+run "Setup modules..."
+lua "$AGENT_PATH" </dev/null >> "$LOG" 2>&1
+sleep 2
+ok "Modules installed."
+
+# Run 2: actual run with key
+run "Start agent dengan key..."
 echo "$SCRIPT_KEY" | lua "$AGENT_PATH" 2>&1 | tee -a "$LOG"
 sleep 3
 [ -d "$HOME/.winterhub" ] && ok "Agent config OK." || err "Config belum ada. Cek manual."
