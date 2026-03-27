@@ -22,20 +22,22 @@ pkg_installed() { dpkg -l "$1" 2>/dev/null | grep -q "^ii"; }
 install_pkg() {
   local pkg="$1"
   pkg_installed "$pkg" && { ok "$pkg sudah ada."; return 0; }
+
+  # Attempt 1: langsung pkg install
   run "pkg install $pkg..."
   timeout 120 pkg install -y "$pkg" >> "$LOG" 2>&1
   pkg_installed "$pkg" && { ok "$pkg OK."; return 0; }
-  run "Retry via Cloudflare CDN..."
+
+  # Attempt 2: ganti repo lalu retry
+  run "$pkg gagal, ganti repo & retry..."
   echo 'deb https://packages-cf.termux.dev/apt/termux-main stable main' > "$PREFIX/etc/apt/sources.list"
-  timeout 60 apt-get update -qq >> "$LOG" 2>&1
-  timeout 120 apt-get install -y "$pkg" >> "$LOG" 2>&1
-  pkg_installed "$pkg" && { ok "$pkg OK (CDN)."; return 0; }
-  run "Repair dpkg & retry..."
-  timeout 30 dpkg --configure -a >> "$LOG" 2>&1
-  apt-get -f install -y >> "$LOG" 2>&1
+  timeout 60 pkg update -y >> "$LOG" 2>&1
   timeout 120 pkg install -y "$pkg" >> "$LOG" 2>&1
-  pkg_installed "$pkg" && { ok "$pkg OK (repair)."; return 0; }
-  die "$pkg gagal install!"
+  pkg_installed "$pkg" && { ok "$pkg OK (retry)."; return 0; }
+
+  err "$pkg gagal install."
+  err "Jalankan 'termux-change-repo' lalu 'pkg install $pkg' manual."
+  return 1
 }
 
 dl() {
@@ -74,18 +76,10 @@ ok "Root aktif."
 
 # ── [3/7] Packages ────────────────────
 echo -e "\n  ${W}[3/7] Install Paket${R}"
-run "dpkg --configure -a..."
-timeout 30 dpkg --configure -a >> "$LOG" 2>&1
 run "pkg update..."
-timeout 90 pkg update -y >> "$LOG" 2>&1 && ok "pkg update OK." || {
-  run "Retry via CDN..."
-  echo 'deb https://packages-cf.termux.dev/apt/termux-main stable main' > "$PREFIX/etc/apt/sources.list"
-  timeout 90 pkg update -y >> "$LOG" 2>&1 || die "pkg update gagal."
-  ok "pkg update OK (CDN)."
-}
+timeout 90 pkg update -y >> "$LOG" 2>&1 && ok "pkg update OK." || err "pkg update gagal (lanjut...)"
 run "pkg upgrade..."
 timeout 300 pkg upgrade -y >> "$LOG" 2>&1 && ok "pkg upgrade OK." || err "pkg upgrade partial (lanjut...)"
-timeout 30 dpkg --configure -a >> "$LOG" 2>&1
 for pkg in lua53 tsu termux-boot; do
   install_pkg "$pkg"
 done
