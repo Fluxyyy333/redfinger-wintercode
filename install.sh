@@ -41,7 +41,7 @@ ok "Root aktif."
 echo -e "\n  ${W}[3/7] Install Paket${R}"
 run "pkg update & upgrade..."
 pkg update -y 2>&1 | tee -a "$LOG"
-pkg upgrade -y 2>&1 | tee -a "$LOG"
+DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::="--force-confnew" 2>&1 | tee -a "$LOG"
 run "pkg install lua53 tsu termux-boot..."
 pkg install -y lua53 tsu termux-boot 2>&1 | tee -a "$LOG"
 
