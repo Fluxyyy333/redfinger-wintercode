@@ -95,8 +95,8 @@ ok "Modules installed."
 # Inject key langsung ke ~/.winterhub/key.txt
 run "Inject script key..."
 mkdir -p "$HOME/.winterhub"
-printf '%s' "$SCRIPT_KEY" > "$HOME/.winterhub/key.txt"
-ok "Key tersimpan di ~/.winterhub/key.txt"
+printf '%s' "$SCRIPT_KEY" > "$HOME/.winterhub/script_key"
+ok "Key tersimpan di ~/.winterhub/script_key"
 
 # Run 2: actual run (baca key dari file)
 run "Start agent..."
