@@ -19,8 +19,8 @@ run() { echo -e "  ${Y}>${R} $1" | tee -a "$LOG"; }
 echo -e "\n${C}  REDFINGER INSTALLER${R}"
 echo -e "${C}  Wintercode Agent + Optimizer${R}\n"
 
-# ── [1/7] Script Key ──────────────────
-echo -e "  ${W}[1/7] Script Key${R}"
+# ── [1/8] Script Key ──────────────────
+echo -e "  ${W}[1/8] Script Key${R}"
 if [ -n "$1" ]; then
   SCRIPT_KEY="$1"
   ok "Key diterima dari argumen."
@@ -32,8 +32,8 @@ echo "SCRIPT_KEY=$SCRIPT_KEY" > "$CONFIG"
 chmod 600 "$CONFIG"
 ok "Key tersimpan."
 
-# ── [2/7] Root ────────────────────────
-echo -e "\n  ${W}[2/7] Cek Root${R}"
+# ── [2/8] Root ────────────────────────
+echo -e "\n  ${W}[2/8] Cek Root${R}"
 su -c "id" > /dev/null 2>&1 || { err "ROOT GAGAL."; exit 1; }
 ok "Root aktif."
 
@@ -94,8 +94,8 @@ pkg_install_retry() {
   return 1
 }
 
-# ── [3/7] Packages ────────────────────
-echo -e "\n  ${W}[3/7] Install Paket${R}"
+# ── [3/8] Packages ────────────────────
+echo -e "\n  ${W}[3/8] Install Paket${R}"
 pkg_update_retry || { err "Tidak bisa update. Abort."; exit 1; }
 
 run "pkg upgrade..."
@@ -116,8 +116,47 @@ else
   exit 1
 fi
 
-# ── [4/7] Download Scripts ────────────
-echo -e "\n  ${W}[4/7] Download Scripts${R}"
+# ── [4/8] Termux:Boot ─────────────────
+echo -e "\n  ${W}[4/8] Termux:Boot${R}"
+if su -c "pm list packages 2>/dev/null" | grep -q "com.termux.boot"; then
+  ok "Termux:Boot sudah terinstall."
+else
+  run "Download Termux:Boot APK..."
+  BOOT_APK="/sdcard/Download/termux-boot.apk"
+  BOOT_OK=0
+  for vc in 8 7; do
+    if curl -fsSL --max-time 30 -o "$BOOT_APK" \
+      "https://f-droid.org/repo/com.termux.boot_${vc}.apk" 2>> "$LOG"; then
+      [ -s "$BOOT_APK" ] && { BOOT_OK=1; break; }
+    fi
+  done
+
+  if [ $BOOT_OK -eq 1 ]; then
+    run "Install APK via pm install..."
+    if su -c "pm install '$BOOT_APK'" >> "$LOG" 2>&1; then
+      ok "Termux:Boot terinstall."
+    else
+      err "pm install gagal. Install manual: $BOOT_APK"
+    fi
+    rm -f "$BOOT_APK"
+  else
+    err "Download APK gagal. Install manual dari F-Droid."
+  fi
+fi
+
+# Buka 1x agar Android register BOOT_COMPLETED receiver
+run "Register boot receiver..."
+su -c "monkey -p com.termux.boot -c android.intent.category.LAUNCHER 1" > /dev/null 2>&1
+sleep 2
+su -c "am force-stop com.termux.boot" 2>/dev/null
+
+# Doze whitelist agar boot receiver tidak di-block
+su -c "dumpsys deviceidle whitelist +com.termux.boot" 2>/dev/null
+su -c "am set-standby-bucket com.termux.boot active" 2>/dev/null
+ok "Boot receiver registered & doze whitelisted."
+
+# ── [5/8] Download Scripts ────────────
+echo -e "\n  ${W}[5/8] Download Scripts${R}"
 mkdir -p "$HOME/scripts" "$HOME/.termux/boot"
 for f in autorun.sh scripts/optimize_rf.sh scripts/debloat_rf.sh scripts/oom_watcher.sh; do
   run "Download $f..."
@@ -129,8 +168,8 @@ mv "$HOME/autorun.sh" "$HOME/.termux/boot/autorun.sh" 2>/dev/null
 chmod +x "$HOME/.termux/boot/autorun.sh" "$HOME/scripts/"*.sh
 ok "Semua script siap."
 
-# ── [5/7] Debloat & Optimasi ──────────
-echo -e "\n  ${W}[5/7] Debloat & Optimasi${R}"
+# ── [6/8] Debloat & Optimasi ──────────
+echo -e "\n  ${W}[6/8] Debloat & Optimasi${R}"
 run "debloat_rf.sh..."
 bash "$HOME/scripts/debloat_rf.sh" >> "$LOG" 2>&1
 ok "Debloat selesai."
@@ -138,8 +177,8 @@ run "optimize_rf.sh..."
 bash "$HOME/scripts/optimize_rf.sh" >> "$LOG" 2>&1
 ok "Optimasi selesai."
 
-# ── [6/7] Wintercode Agent ────────────
-echo -e "\n  ${W}[6/7] Wintercode Agent${R}"
+# ── [7/8] Wintercode Agent ────────────
+echo -e "\n  ${W}[7/8] Wintercode Agent${R}"
 run "Download agent.lua..."
 curl -L -o "$AGENT_PATH" "$AGENT_URL" 2>&1 | tee -a "$LOG"
 [ -s "$AGENT_PATH" ] || { err "Download agent gagal."; exit 1; }
@@ -165,10 +204,31 @@ sleep 3
 AGENT_PID=$(pgrep -f "lua.*agent" 2>/dev/null | head -1)
 [ -n "$AGENT_PID" ] && ok "Agent running (PID: $AGENT_PID)" || err "Agent tidak jalan. Run manual: lua $AGENT_PATH </dev/null"
 
-# ── [7/7] OOM Watcher ─────────────────
-echo -e "\n  ${W}[7/7] OOM Watcher${R}"
+# ── [8/8] Boot Guard ─────────────────
+echo -e "\n  ${W}[8/8] Boot Guard${R}"
+
+# Start OOM watcher for current session
 bash "$HOME/scripts/oom_watcher.sh" >> "$HOME/oom_watcher.log" 2>&1 &
 ok "OOM watcher aktif (PID: $!)"
+
+# .bashrc guard — backup trigger jika Termux:Boot gagal
+GUARD_MARKER="# AUTORUN_GUARD"
+if grep -q "$GUARD_MARKER" "$HOME/.bashrc" 2>/dev/null; then
+  ok ".bashrc guard sudah ada."
+else
+  cat >> "$HOME/.bashrc" << 'BASHRC'
+
+# AUTORUN_GUARD — backup trigger jika Termux:Boot gagal
+if [ -f "$HOME/.termux/boot/autorun.sh" ]; then
+  if ! pgrep -f "oom_watcher.sh" > /dev/null 2>&1; then
+    echo "[.bashrc] Daemon belum jalan — trigger autorun..."
+    nohup bash "$HOME/.termux/boot/autorun.sh" > /dev/null 2>&1 &
+    disown
+  fi
+fi
+BASHRC
+  ok ".bashrc guard terpasang."
+fi
 
 # ── Done ──────────────────────────────
 FREE_MB=$(( $(grep MemAvailable /proc/meminfo | awk '{print $2}') / 1024 ))
@@ -179,7 +239,7 @@ echo "  ────────────────────────
 echo -e "  RAM   : ${W}${FREE_MB}MB${R} / ${TOTAL_MB}MB"
 echo -e "  Agent : ${G}Wintercode${R}"
 echo -e "  OOM   : ${G}Aktif${R}"
-echo -e "  Boot  : ${G}Siap${R} (Termux:Boot)"
+echo -e "  Boot  : ${G}Termux:Boot + .bashrc guard${R}"
 echo "  ─────────────────────────────"
 echo "  Restart Redfinger untuk"
 echo "  aktifkan autorun."

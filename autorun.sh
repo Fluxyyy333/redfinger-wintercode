@@ -11,6 +11,18 @@ AGENT_PATH="/sdcard/Download/agent.lua"
 trap '' PIPE        # Ignore SIGPIPE — prevents "Broken pipe" crash
 set +e              # Don't exit on error in keep-alive loop
 
+# ── Prevent double-run (Termux:Boot + .bashrc race) ─────────
+LOCKFILE="$HOME/.autorun.pid"
+if [ -f "$LOCKFILE" ]; then
+  OLD_PID=$(cat "$LOCKFILE" 2>/dev/null)
+  if kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "$(date '+%H:%M:%S') [!] autorun sudah jalan (PID $OLD_PID), skip" >> "$LOG"
+    exit 0
+  fi
+fi
+echo $$ > "$LOCKFILE"
+trap 'rm -f "$LOCKFILE"' EXIT INT TERM
+
 # ── Acquire wake lock PERTAMA ────────────────────────────────
 termux-wake-lock
 

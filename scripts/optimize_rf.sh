@@ -105,6 +105,7 @@ for pkg in $FLUXY_PKGS; do
   COUNT=$((COUNT + 1))
 done
 su -c "dumpsys deviceidle whitelist +com.termux 2>/dev/null"
+su -c "dumpsys deviceidle whitelist +com.termux.boot 2>/dev/null"
 su -c "am set-standby-bucket com.termux active 2>/dev/null"
 su -c "am set-standby-bucket com.termux.boot active 2>/dev/null"
 running "device_idle_constants → timeout 24 jam..."
