@@ -47,13 +47,27 @@ FALLBACK_MIRRORS=(
   "https://mirror.quantum5.ca/termux/termux-main"
 )
 _MIRROR_IDX=0
+APT_DIR="/data/data/com.termux/files/usr/etc/apt"
+APT_LISTS="/data/data/com.termux/files/usr/var/lib/apt/lists"
 
 switch_mirror() {
   local mirror="${FALLBACK_MIRRORS[$_MIRROR_IDX]}"
   _MIRROR_IDX=$(( (_MIRROR_IDX + 1) % ${#FALLBACK_MIRRORS[@]} ))
   run "Switch mirror → $mirror"
-  echo "deb $mirror stable main" \
-    > /data/data/com.termux/files/usr/etc/apt/sources.list
+
+  # Clear cached apt lists — tanpa ini apt masih pakai metadata rusak
+  rm -rf "$APT_LISTS"/* 2>/dev/null
+
+  # Tulis mirror baru ke sources.list
+  echo "deb $mirror stable main" > "$APT_DIR/sources.list"
+
+  # Update sources.list.d/ jika ada (repo tambahan)
+  if [ -d "$APT_DIR/sources.list.d" ]; then
+    for f in "$APT_DIR/sources.list.d"/*.list; do
+      [ -f "$f" ] || continue
+      sed -i "s|deb [^ ]*/termux-main|deb $mirror|" "$f" 2>/dev/null
+    done
+  fi
 }
 
 is_mirror_error() {
