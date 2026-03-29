@@ -37,23 +37,82 @@ echo -e "\n  ${W}[2/7] Cek Root${R}"
 su -c "id" > /dev/null 2>&1 || { err "ROOT GAGAL."; exit 1; }
 ok "Root aktif."
 
+# ── Mirror helpers ────────────────────
+FALLBACK_MIRRORS=(
+  "https://packages-cf.termux.dev/apt/termux-main"
+  "https://packages.termux.dev/apt/termux-main"
+  "https://mirrors.tuna.tsinghua.edu.cn/termux/apt/termux-main"
+  "https://mirrors.ustc.edu.cn/termux/termux-main"
+  "https://grimler.se/termux/termux-main"
+  "https://mirror.quantum5.ca/termux/termux-main"
+)
+_MIRROR_IDX=0
+
+switch_mirror() {
+  local mirror="${FALLBACK_MIRRORS[$_MIRROR_IDX]}"
+  _MIRROR_IDX=$(( (_MIRROR_IDX + 1) % ${#FALLBACK_MIRRORS[@]} ))
+  run "Switch mirror → $mirror"
+  echo "deb $mirror stable main" \
+    > /data/data/com.termux/files/usr/etc/apt/sources.list
+}
+
+is_mirror_error() {
+  echo "$1" | grep -qE \
+    "unexpected size|Mirror sync in progress|Failed to fetch|Some index files failed"
+}
+
+pkg_update_retry() {
+  local attempt=0 max=6
+  while [ $attempt -lt $max ]; do
+    out=$(pkg update -y 2>&1); echo "$out" | tee -a "$LOG"
+    if is_mirror_error "$out"; then
+      attempt=$((attempt + 1))
+      err "Mirror error ($attempt/$max), ganti mirror..."
+      switch_mirror
+      sleep 2
+    else
+      ok "pkg update OK"; return 0
+    fi
+  done
+  err "pkg update gagal setelah $max percobaan"
+  return 1
+}
+
+pkg_install_retry() {
+  local pkg="$1" attempt=0 max=4
+  while [ $attempt -lt $max ]; do
+    out=$(pkg install -y "$pkg" 2>&1); echo "$out" | tee -a "$LOG"
+    if is_mirror_error "$out"; then
+      attempt=$((attempt + 1))
+      err "$pkg mirror error ($attempt/$max), retry update..."
+      pkg_update_retry
+    else
+      return 0
+    fi
+  done
+  err "$pkg gagal setelah $max percobaan"
+  return 1
+}
+
 # ── [3/7] Packages ────────────────────
 echo -e "\n  ${W}[3/7] Install Paket${R}"
-run "pkg update & upgrade..."
-pkg update -y 2>&1 | tee -a "$LOG"
-DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::="--force-confnew" 2>&1 | tee -a "$LOG"
+pkg_update_retry || { err "Tidak bisa update. Abort."; exit 1; }
+
+run "pkg upgrade..."
+DEBIAN_FRONTEND=noninteractive pkg upgrade -y \
+  -o Dpkg::Options::="--force-confnew" 2>&1 | tee -a "$LOG"
+
 run "pkg install lua53..."
-pkg install -y lua53 2>&1 | tee -a "$LOG"
+pkg_install_retry lua53
+
 run "pkg install tsu..."
-pkg install -y tsu 2>&1 | tee -a "$LOG"
+pkg_install_retry tsu
 
 # Verify lua
 if command -v lua > /dev/null 2>&1; then
   ok "lua OK: $(lua -v 2>&1 | head -1)"
 else
-  err "lua53 GAGAL. Coba manual:"
-  err "  termux-change-repo"
-  err "  pkg install lua53"
+  err "lua53 GAGAL setelah semua retry."
   exit 1
 fi
 
