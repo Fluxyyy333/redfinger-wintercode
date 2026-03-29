@@ -7,12 +7,17 @@ CONFIG="$HOME/.rf_config"
 AGENT_URL="https://api.wintercode.dev/loader/agent-obfuscated.lua"
 AGENT_PATH="/sdcard/Download/agent.lua"
 
+# ── CRITICAL: Survive broken pipes & signals ────────────────
+trap '' PIPE        # Ignore SIGPIPE — prevents "Broken pipe" crash
+set +e              # Don't exit on error in keep-alive loop
+
 # ── Acquire wake lock PERTAMA ────────────────────────────────
-# Wajib dipanggil sebelum apapun agar ini berjalan sebagai proper task
-# (muncul sebagai "0 session, 1 task" di notifikasi Termux, bukan "1 session, 0 task")
 termux-wake-lock
 
-log() { echo "$(date '+%H:%M:%S') $1" | tee -a "$LOG"; }
+# ── Self-protect from OOM immediately ────────────────────────
+su -c "echo -900 > /proc/$$/oom_score_adj" 2>/dev/null
+
+log() { echo "$(date '+%H:%M:%S') $1" >> "$LOG" 2>/dev/null; }
 
 {
 echo ""
@@ -21,7 +26,7 @@ echo "  AUTORUN — $(date)"
 echo "══════════════════════════════"
 } >> "$LOG"
 
-# Load config — jangan exit jika tidak ada, lanjut saja
+# Load config
 if [ -f "$CONFIG" ]; then
   source "$CONFIG"
 else
@@ -46,66 +51,87 @@ log "[*] [1/3] Optimizer..."
 bash "$HOME/scripts/optimize_rf.sh" >> "$LOG" 2>&1
 log "[+] Optimizer selesai."
 
-# ── [2/3] OOM Watcher — daemon dengan auto-restart ──────────
+# ── [2/3] OOM Watcher — independent daemon ──────────────────
 log "[*] [2/3] OOM Watcher daemon..."
-(
-  while true; do
-    bash "$HOME/scripts/oom_watcher.sh" >> "$HOME/oom_watcher.log" 2>&1
-    log "[!] OOM watcher mati — restart dalam 5s"
-    sleep 5
-  done
-) &
-log "[+] OOM watcher daemon (PID: $!)"
+start_oom_watcher() {
+  # nohup + setsid = survives parent death
+  nohup setsid bash -c '
+    while true; do
+      bash "$HOME/scripts/oom_watcher.sh" >> "$HOME/oom_watcher.log" 2>&1
+      sleep 5
+    done
+  ' > /dev/null 2>&1 &
+  log "[+] OOM watcher daemon (PID: $!)"
+}
+start_oom_watcher
 
-# ── [3/3] Wintercode Agent — watchdog auto-restart ──────────
+# ── [3/3] Wintercode Agent — independent watchdog ────────────
 log "[*] [3/3] Wintercode Agent watchdog..."
-if ! command -v lua > /dev/null 2>&1; then
-  log "[!] lua tidak terinstall — skip agent."
-else
-  (
+start_agent_watchdog() {
+  if ! command -v lua > /dev/null 2>&1; then
+    log "[!] lua tidak terinstall — skip agent."
+    return 1
+  fi
+  nohup setsid bash -c '
+    LOG="$HOME/boot.log"
+    AGENT_URL="'"$AGENT_URL"'"
+    AGENT_PATH="'"$AGENT_PATH"'"
     FAIL_COUNT=0
     while true; do
       if curl -fsSL --max-time 30 "$AGENT_URL" -o "$AGENT_PATH" 2>> "$LOG"; then
         if [ -s "$AGENT_PATH" ]; then
-          log "[+] Agent download OK — launching (attempt $((FAIL_COUNT + 1)))"
+          echo "$(date +%H:%M:%S) [+] Agent download OK — launching (attempt $((FAIL_COUNT + 1)))" >> "$LOG"
           lua "$AGENT_PATH" </dev/null >> "$LOG" 2>&1
-          log "[!] Agent exit (code $?) — akan restart"
+          echo "$(date +%H:%M:%S) [!] Agent exit (code $?) — akan restart" >> "$LOG"
         else
-          log "[!] Agent file kosong"
+          echo "$(date +%H:%M:%S) [!] Agent file kosong" >> "$LOG"
         fi
       else
-        log "[!] Download agent gagal"
+        echo "$(date +%H:%M:%S) [!] Download agent gagal" >> "$LOG"
       fi
-
       FAIL_COUNT=$((FAIL_COUNT + 1))
-      # Backoff eksponensial, max 120s
       WAIT=$(( FAIL_COUNT < 4 ? 15 : (FAIL_COUNT < 8 ? 60 : 120) ))
-      log "[*] Restart agent dalam ${WAIT}s (fail #${FAIL_COUNT})"
+      echo "$(date +%H:%M:%S) [*] Restart agent dalam ${WAIT}s (fail #${FAIL_COUNT})" >> "$LOG"
       sleep $WAIT
     done
-  ) &
+  ' > /dev/null 2>&1 &
   log "[+] Agent watchdog (PID: $!)"
-fi
+}
+start_agent_watchdog
 
 log "[+] Boot sequence selesai — semua daemon aktif."
 echo "══════════════════════════════" >> "$LOG"
 
-# ── Keep-alive loop ──────────────────────────────────────────
+# ── Keep-alive loop (fault-tolerant) ─────────────────────────
 # JANGAN dihapus. Tanpa ini Termux:Boot task langsung exit,
-# wake lock lepas, dan semua daemon jadi orphan yang rentan OOM.
+# wake lock lepas, dan semua daemon rentan OOM.
 while true; do
-  sleep 300
+  sleep 300 || true  # Don't crash if sleep is interrupted
+
+  # Re-acquire wake lock (in case it was released)
+  termux-wake-lock 2>/dev/null
+
+  # Re-protect self from OOM
+  su -c "echo -900 > /proc/$$/oom_score_adj" 2>/dev/null
 
   # Cek apakah oom_watcher masih berjalan
   if ! pgrep -f "oom_watcher.sh" > /dev/null 2>&1; then
     log "[!] OOM watcher tidak ditemukan — restart darurat"
-    bash "$HOME/scripts/oom_watcher.sh" >> "$HOME/oom_watcher.log" 2>&1 &
+    start_oom_watcher
   fi
 
-  # Log heartbeat tiap jam
-  MINUTE=$(date +%M)
-  if [ "$MINUTE" -lt 5 ]; then
-    FREE_MB=$(( $(grep MemAvailable /proc/meminfo | awk '{print $2}') / 1024 ))
+  # Cek apakah agent masih berjalan
+  if command -v lua > /dev/null 2>&1; then
+    if ! pgrep -f "lua.*agent" > /dev/null 2>&1; then
+      log "[!] Agent tidak ditemukan — restart darurat"
+      start_agent_watchdog
+    fi
+  fi
+
+  # Log heartbeat tiap jam (fault-tolerant)
+  MINUTE=$(date +%M 2>/dev/null) || continue
+  if [ "${MINUTE:-99}" -lt 5 ] 2>/dev/null; then
+    FREE_MB=$(( $(grep MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}') / 1024 )) 2>/dev/null || FREE_MB="?"
     log "[~] Heartbeat — RAM free: ${FREE_MB}MB"
   fi
 done
