@@ -114,6 +114,19 @@ while true; do
   # Re-protect self from OOM
   su -c "echo -900 > /proc/$$/oom_score_adj" 2>/dev/null
 
+  # ── Periodic bloatware kill ──
+  # Beberapa service restart sendiri via broadcast receiver
+  # Pada 4GB / 5 instance, setiap MB penting
+  for pkg in \
+    "com.android.vending" "com.google.android.apps.nbu.files" \
+    "com.google.android.inputmethod.latin" "com.google.android.play.games" \
+    "com.android.inputmethod.latin" "com.android.phone" \
+    "com.wsh.appstore" "com.android.email" \
+    "com.android.messaging" "com.android.calendar" \
+    "com.baidu.cloud.service" "com.wshl.file.observerservice"; do
+    su -c "am force-stop $pkg" 2>/dev/null
+  done
+
   # Cek apakah oom_watcher masih berjalan
   if ! pgrep -f "oom_watcher.sh" > /dev/null 2>&1; then
     log "[!] OOM watcher tidak ditemukan — restart darurat"
