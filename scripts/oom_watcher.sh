@@ -1,12 +1,21 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # OOM_WATCHER.sh — Protect critical processes from OOM killer
 # Dijalankan sebagai daemon oleh autorun.sh — jangan run manual
+#
+# OOM score gradient (lower = more protected):
+#   -800  watcher self    (ringan, harus hidup paling lama)
+#   -400  com.termux      (infrastruktur)
+#   -300  lua agent       (konektivitas)
+#   -200  com.fluxy*      (workload, heavy RAM — harus bisa di-sacrifice terakhir)
+#
+# Jangan set semua ke -900/-1000. Kalau tidak ada target yang bisa
+# di-kill, OOM killer bisa random kill atau trigger device reboot.
 
 LOG="${LOG:-$HOME/oom_watcher.log}"
 echo "=== OOM WATCHER START: $(date) ===" >> "$LOG"
 
-# Self-protect: watcher tidak boleh ikut mati duluan
-su -c "echo -200 > /proc/$$/oom_score_adj" 2>/dev/null
+# Self-protect: watcher harus hidup paling lama
+su -c "echo -800 > /proc/$$/oom_score_adj" 2>/dev/null
 
 PROTECTED=()
 
@@ -23,16 +32,16 @@ protect_pid() {
 
 while true; do
 
-  # ── Protect Termux (paling penting) ──
+  # ── Protect Termux ──
   TERMUX_PIDS=$(su -c "ps -A 2>/dev/null | grep 'com\.termux' | awk '{print \$2}'")
   for pid in $TERMUX_PIDS; do
     [ -z "$pid" ] && continue
-    protect_pid "$pid" -500 "com.termux"
+    protect_pid "$pid" -400 "com.termux"
   done
 
   # ── Protect Lua agent ──
   LUA_PID=$(pgrep -n lua 2>/dev/null)
-  [ -n "$LUA_PID" ] && protect_pid "$LUA_PID" -400 "lua-agent"
+  [ -n "$LUA_PID" ] && protect_pid "$LUA_PID" -300 "lua-agent"
 
   # ── Protect com.fluxy* instances ──
   CURRENT_PIDS=$(su -c "ps -A 2>/dev/null | grep 'com\.fluxy' | awk '{print \$2}'")
@@ -40,7 +49,7 @@ while true; do
     [ -z "$pid" ] && continue
     if [[ ! " ${PROTECTED[@]} " =~ " $pid " ]]; then
       PKG=$(su -c "cat /proc/$pid/cmdline 2>/dev/null | tr -d '\0'")
-      if protect_pid "$pid" -300 "$PKG"; then
+      if protect_pid "$pid" -200 "$PKG"; then
         PROTECTED+=($pid)
       fi
     fi
@@ -54,7 +63,7 @@ while true; do
   PROTECTED=("${ALIVE[@]}")
 
   COUNT=${#PROTECTED[@]}
-  [ $COUNT -gt 0 ] && echo "[~] Active fluxy instances: $COUNT" >> "$LOG"
+  [ $COUNT -gt 0 ] && echo "[~] Active fluxy instances: $COUNT $(date +%H:%M:%S)" >> "$LOG"
 
   sleep 15
 done
