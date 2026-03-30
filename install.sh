@@ -139,25 +139,26 @@ if ! su -c "pm list packages 2>/dev/null" | grep -q "com.termux.boot"; then
 fi
 ok "Termux:Boot terdeteksi."
 
-# Buka 1x agar Android register BOOT_COMPLETED receiver
+# Clear stopped state — app dari install lama bisa dalam kondisi 'stopped'
+# Android tidak kirim BOOT_COMPLETED ke app yang masih stopped
+run "Clear stopped state..."
+su -c "am clear-force-stop com.termux.boot" 2>/dev/null
+su -c "cmd package unstop com.termux.boot" 2>/dev/null
+
+# Buka activity secara eksplisit
 run "Buka Termux:Boot..."
-su -c "am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p com.termux.boot" > /dev/null 2>&1 ||   su -c "am start -n com.termux.boot/com.termux.boot.BootActivity" > /dev/null 2>&1
+su -c "am start -n com.termux.boot/.BootActivity" >> "$LOG" 2>&1
 sleep 3
 su -c "am force-stop com.termux.boot" 2>/dev/null
 ok "Termux:Boot dibuka."
 
-# Enable boot receiver secara eksplisit
+# Enable receiver + component
 run "Enable boot receiver..."
-BOOT_RECV=$(su -c "dumpsys package com.termux.boot" 2>/dev/null | grep -oE 'com[.]termux[.]boot/[^ ]*[Bb]oot[Rr]eceiver[^ ]*' | head -1)
-if [ -n "$BOOT_RECV" ]; then
-  su -c "pm enable $BOOT_RECV" >> "$LOG" 2>&1
-  ok "Receiver enabled: $BOOT_RECV"
-else
-  su -c "pm enable com.termux.boot/com.termux.boot.BootReceiver" >> "$LOG" 2>&1
-  ok "Receiver enabled (fallback)."
-fi
+su -c "pm enable com.termux.boot/.BootReceiver" >> "$LOG" 2>&1
+su -c "pm enable com.termux.boot/.BootActivity" >> "$LOG" 2>&1
+ok "Receiver & Activity enabled."
 
-# Doze whitelist agar boot receiver tidak di-block
+# Doze whitelist
 su -c "dumpsys deviceidle whitelist +com.termux.boot" 2>/dev/null
 su -c "am set-standby-bucket com.termux.boot active" 2>/dev/null
 ok "Doze whitelisted."
