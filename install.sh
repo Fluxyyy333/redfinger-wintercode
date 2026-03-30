@@ -180,6 +180,10 @@ done
 # autorun.sh goes to boot dir
 mv "$HOME/autorun.sh" "$HOME/.termux/boot/autorun.sh" 2>/dev/null
 chmod +x "$HOME/.termux/boot/autorun.sh" "$HOME/scripts/"*.sh
+# Validasi file kritikal sebelum lanjut
+for _f in "$HOME/.termux/boot/autorun.sh" "$HOME/scripts/optimize_rf.sh" "$HOME/scripts/oom_watcher.sh"; do
+  [ -s "$_f" ] || { err "KRITIKAL: $_f tidak ada — abort."; exit 1; }
+done
 ok "Semua script siap."
 
 # ── [6/8] Debloat & Optimasi ──────────
@@ -200,7 +204,7 @@ ok "agent.lua downloaded."
 
 # Run 1: install modules (cjson dll)
 run "Setup modules..."
-lua "$AGENT_PATH" </dev/null >> "$LOG" 2>&1
+timeout 30 lua "$AGENT_PATH" </dev/null >> "$LOG" 2>&1
 sleep 2
 ok "Modules installed."
 
@@ -212,7 +216,7 @@ ok "Key tersimpan di ~/.winterhub/script_key"
 
 # Run 2: actual run (baca key dari file)
 run "Start agent..."
-lua "$AGENT_PATH" </dev/null 2>&1 | tee -a "$LOG"
+timeout 60 lua "$AGENT_PATH" </dev/null 2>&1 | tee -a "$LOG"
 sleep 3
 [ -d "$HOME/.winterhub" ] && ok "Agent config OK." || err "Config belum ada. Cek manual."
 AGENT_PID=$(pgrep -f "lua.*agent" 2>/dev/null | head -1)
