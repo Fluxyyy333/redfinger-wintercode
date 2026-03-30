@@ -136,45 +136,8 @@ else
   exit 1
 fi
 
-# ── [4/8] Termux:Boot ─────────────────
-echo -e "\n  ${W}[4/8] Termux:Boot${R}"
-if ! su -c "pm list packages 2>/dev/null" | grep -q "com.termux.boot"; then
-  err "Termux:Boot belum terinstall."
-  err "Install dari F-Droid lalu jalankan ulang install.sh"
-  exit 1
-fi
-ok "Termux:Boot terdeteksi."
-
-# Coba launch — verifikasi apakah versi ini bisa dibuka
-run "Verifikasi Termux:Boot..."
-su -c "am start -W -n com.termux.boot/.BootActivity" >> "$LOG" 2>&1
-sleep 2
-
-# Cek apakah masih stopped (artinya versi lama / broken)
-if su -c "dumpsys package com.termux.boot" 2>/dev/null | grep -q "stopped=true"; then
-  err "Termux:Boot versi lama (tidak bisa dibuka)."
-  run "Uninstall versi lama..."
-  su -c "pm uninstall com.termux.boot" >> "$LOG" 2>&1
-  ok "Versi lama dihapus."
-  err "Install Termux:Boot BARU dari F-Droid lalu jalankan ulang install.sh"
-  exit 1
-fi
-ok "Termux:Boot aktif."
-su -c "am force-stop com.termux.boot" 2>/dev/null
-
-# Enable receiver + component
-run "Enable boot receiver..."
-su -c "pm enable com.termux.boot/.BootReceiver" >> "$LOG" 2>&1
-su -c "pm enable com.termux.boot/.BootActivity" >> "$LOG" 2>&1
-ok "Receiver & Activity enabled."
-
-# Doze whitelist
-su -c "dumpsys deviceidle whitelist +com.termux.boot" 2>/dev/null
-su -c "am set-standby-bucket com.termux.boot active" 2>/dev/null
-ok "Doze whitelisted."
-
-# ── [5/8] Download Scripts ────────────
-echo -e "\n  ${W}[5/8] Download Scripts${R}"
+# ── [4/7] Download Scripts ────────────
+echo -e "\n  ${W}[4/7] Download Scripts${R}"
 mkdir -p "$HOME/scripts" "$HOME/.termux/boot"
 for f in autorun.sh scripts/optimize_rf.sh scripts/debloat_rf.sh scripts/oom_watcher.sh; do
   run "Download $f..."
@@ -190,8 +153,8 @@ for _f in "$HOME/.termux/boot/autorun.sh" "$HOME/scripts/optimize_rf.sh" "$HOME/
 done
 ok "Semua script siap."
 
-# ── [6/8] Debloat & Optimasi ──────────
-echo -e "\n  ${W}[6/8] Debloat & Optimasi${R}"
+# ── [5/7] Debloat & Optimasi ──────────
+echo -e "\n  ${W}[5/7] Debloat & Optimasi${R}"
 run "debloat_rf.sh..."
 bash "$HOME/scripts/debloat_rf.sh" >> "$LOG" 2>&1
 ok "Debloat selesai."
@@ -199,8 +162,8 @@ run "optimize_rf.sh..."
 bash "$HOME/scripts/optimize_rf.sh" >> "$LOG" 2>&1
 ok "Optimasi selesai."
 
-# ── [7/8] Wintercode Agent ────────────
-echo -e "\n  ${W}[7/8] Wintercode Agent${R}"
+# ── [6/7] Wintercode Agent ────────────
+echo -e "\n  ${W}[6/7] Wintercode Agent${R}"
 run "Download agent.lua..."
 curl -L -o "$AGENT_PATH" "$AGENT_URL" 2>&1 | tee -a "$LOG"
 [ -s "$AGENT_PATH" ] || { err "Download agent gagal."; exit 1; }
@@ -235,8 +198,8 @@ fi
 AGENT_PID=$(pgrep -f "lua.*agent" 2>/dev/null | head -1)
 [ -n "$AGENT_PID" ] && ok "Agent running (PID: $AGENT_PID)" || err "Agent tidak jalan. Run manual: lua $AGENT_PATH </dev/null"
 
-# ── [8/8] Boot Guard ─────────────────
-echo -e "\n  ${W}[8/8] Boot Guard${R}"
+# ── [7/7] Boot Guard ─────────────────
+echo -e "\n  ${W}[7/7] Boot Guard${R}"
 
 # Start OOM watcher for current session
 bash "$HOME/scripts/oom_watcher.sh" >> "$HOME/oom_watcher.log" 2>&1 &
