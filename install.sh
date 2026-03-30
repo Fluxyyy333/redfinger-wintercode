@@ -132,31 +132,12 @@ fi
 
 # ── [4/8] Termux:Boot ─────────────────
 echo -e "\n  ${W}[4/8] Termux:Boot${R}"
-if su -c "pm list packages 2>/dev/null" | grep -q "com.termux.boot"; then
-  ok "Termux:Boot sudah terinstall."
-else
-  run "Download Termux:Boot APK..."
-  BOOT_APK="/sdcard/Download/termux-boot.apk"
-  BOOT_OK=0
-  for vc in 8 7; do
-    if curl -fsSL --max-time 30 -o "$BOOT_APK" \
-      "https://f-droid.org/repo/com.termux.boot_${vc}.apk" 2>> "$LOG"; then
-      [ -s "$BOOT_APK" ] && { BOOT_OK=1; break; }
-    fi
-  done
-
-  if [ $BOOT_OK -eq 1 ]; then
-    run "Install APK via pm install..."
-    if su -c "pm install '$BOOT_APK'" >> "$LOG" 2>&1; then
-      ok "Termux:Boot terinstall."
-    else
-      err "pm install gagal. Install manual: $BOOT_APK"
-    fi
-    rm -f "$BOOT_APK"
-  else
-    err "Download APK gagal. Install manual dari F-Droid."
-  fi
+if ! su -c "pm list packages 2>/dev/null" | grep -q "com.termux.boot"; then
+  err "Termux:Boot belum terinstall."
+  err "Install dulu dari F-Droid lalu jalankan ulang install.sh"
+  exit 1
 fi
+ok "Termux:Boot terdeteksi."
 
 # Buka 1x agar Android register BOOT_COMPLETED receiver
 run "Register boot receiver..."
@@ -204,11 +185,11 @@ ok "agent.lua downloaded."
 
 # Run 1: install modules (cjson dll)
 run "Setup modules..."
-timeout 120 lua "$AGENT_PATH" </dev/null >> "$LOG" 2>&1
+timeout 300 lua "$AGENT_PATH" </dev/null >> "$LOG" 2>&1
 RC=$?
 sleep 2
-if [ $RC -eq 600 ]; then
-  err "Module setup timeout (120s). Jalankan manual: lua "$AGENT_PATH" lalu ulangi install."
+if [ $RC -eq 124 ]; then
+  err "Module setup timeout (300s). Jalankan manual: lua "$AGENT_PATH" lalu ulangi install."
   exit 1
 fi
 ok "Modules installed."
