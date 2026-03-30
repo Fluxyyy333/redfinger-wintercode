@@ -140,15 +140,27 @@ fi
 ok "Termux:Boot terdeteksi."
 
 # Buka 1x agar Android register BOOT_COMPLETED receiver
-run "Register boot receiver..."
-su -c "monkey -p com.termux.boot -c android.intent.category.LAUNCHER 1" > /dev/null 2>&1
-sleep 2
+run "Buka Termux:Boot..."
+su -c "am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p com.termux.boot" > /dev/null 2>&1 ||   su -c "am start -n com.termux.boot/com.termux.boot.BootActivity" > /dev/null 2>&1
+sleep 3
 su -c "am force-stop com.termux.boot" 2>/dev/null
+ok "Termux:Boot dibuka."
+
+# Enable boot receiver secara eksplisit
+run "Enable boot receiver..."
+BOOT_RECV=$(su -c "dumpsys package com.termux.boot" 2>/dev/null | grep -oE 'com[.]termux[.]boot/[^ ]*[Bb]oot[Rr]eceiver[^ ]*' | head -1)
+if [ -n "$BOOT_RECV" ]; then
+  su -c "pm enable $BOOT_RECV" >> "$LOG" 2>&1
+  ok "Receiver enabled: $BOOT_RECV"
+else
+  su -c "pm enable com.termux.boot/com.termux.boot.BootReceiver" >> "$LOG" 2>&1
+  ok "Receiver enabled (fallback)."
+fi
 
 # Doze whitelist agar boot receiver tidak di-block
 su -c "dumpsys deviceidle whitelist +com.termux.boot" 2>/dev/null
 su -c "am set-standby-bucket com.termux.boot active" 2>/dev/null
-ok "Boot receiver registered & doze whitelisted."
+ok "Doze whitelisted."
 
 # ── [5/8] Download Scripts ────────────
 echo -e "\n  ${W}[5/8] Download Scripts${R}"
