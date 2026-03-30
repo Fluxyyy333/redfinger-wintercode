@@ -204,8 +204,13 @@ ok "agent.lua downloaded."
 
 # Run 1: install modules (cjson dll)
 run "Setup modules..."
-timeout 30 lua "$AGENT_PATH" </dev/null >> "$LOG" 2>&1
+timeout 120 lua "$AGENT_PATH" </dev/null >> "$LOG" 2>&1
+RC=$?
 sleep 2
+if [ $RC -eq 124 ]; then
+  err "Module setup timeout (120s). Jalankan manual: lua "$AGENT_PATH" lalu ulangi install."
+  exit 1
+fi
 ok "Modules installed."
 
 # Inject key langsung ke ~/.winterhub/key.txt
@@ -216,8 +221,12 @@ ok "Key tersimpan di ~/.winterhub/script_key"
 
 # Run 2: actual run (baca key dari file)
 run "Start agent..."
-timeout 60 lua "$AGENT_PATH" </dev/null 2>&1 | tee -a "$LOG"
+timeout 120 lua "$AGENT_PATH" </dev/null 2>&1 | tee -a "$LOG"
+RC=$?
 sleep 3
+if [ $RC -eq 124 ]; then
+  err "Agent start timeout (120s). Cek koneksi lalu jalankan manual: lua "$AGENT_PATH" </dev/null"
+fi
 [ -d "$HOME/.winterhub" ] && ok "Agent config OK." || err "Config belum ada. Cek manual."
 AGENT_PID=$(pgrep -f "lua.*agent" 2>/dev/null | head -1)
 [ -n "$AGENT_PID" ] && ok "Agent running (PID: $AGENT_PID)" || err "Agent tidak jalan. Run manual: lua $AGENT_PATH </dev/null"
