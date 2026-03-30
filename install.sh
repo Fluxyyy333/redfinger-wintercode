@@ -71,8 +71,7 @@ switch_mirror() {
 }
 
 is_mirror_error() {
-  echo "$1" | grep -qE \
-    "unexpected size|Mirror sync in progress|Failed to fetch|Some index files failed"
+  echo "$1" | grep -qiE "unexpected size|Mirror sync in progress|Failed to fetch|Some index files failed|does not have a Release file|Redirection from https|is not signed|NO_PUBKEY"
 }
 
 pkg_update_retry() {
@@ -110,6 +109,13 @@ pkg_install_retry() {
 
 # ── [3/8] Packages ────────────────────
 echo -e "\n  ${W}[3/8] Install Paket${R}"
+# Force switch mirror jika default mirror broken (redirect/expired)
+run "Cek mirror saat ini..."
+CURRENT_MIRROR=$(head -1 "$APT_DIR/sources.list" 2>/dev/null | awk '{print $2}')
+if echo "$CURRENT_MIRROR" | grep -qvE "packages-cf.termux.dev|packages.termux.dev|grimler.se|quantum5.ca|tuna.tsinghua|ustc.edu"; then
+  run "Mirror default tidak dikenal — switch ke mirror terpercaya..."
+  switch_mirror
+fi
 pkg_update_retry || { err "Tidak bisa update. Abort."; exit 1; }
 
 run "pkg upgrade..."
