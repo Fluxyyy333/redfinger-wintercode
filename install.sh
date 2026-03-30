@@ -134,23 +134,27 @@ fi
 echo -e "\n  ${W}[4/8] Termux:Boot${R}"
 if ! su -c "pm list packages 2>/dev/null" | grep -q "com.termux.boot"; then
   err "Termux:Boot belum terinstall."
-  err "Install dulu dari F-Droid lalu jalankan ulang install.sh"
+  err "Install dari F-Droid lalu jalankan ulang install.sh"
   exit 1
 fi
 ok "Termux:Boot terdeteksi."
 
-# Clear stopped state — app dari install lama bisa dalam kondisi 'stopped'
-# Android tidak kirim BOOT_COMPLETED ke app yang masih stopped
-run "Clear stopped state..."
-su -c "am clear-force-stop com.termux.boot" 2>/dev/null
-su -c "cmd package unstop com.termux.boot" 2>/dev/null
+# Coba launch — verifikasi apakah versi ini bisa dibuka
+run "Verifikasi Termux:Boot..."
+su -c "am start -W -n com.termux.boot/.BootActivity" >> "$LOG" 2>&1
+sleep 2
 
-# Buka activity secara eksplisit
-run "Buka Termux:Boot..."
-su -c "am start -n com.termux.boot/.BootActivity" >> "$LOG" 2>&1
-sleep 3
+# Cek apakah masih stopped (artinya versi lama / broken)
+if su -c "dumpsys package com.termux.boot" 2>/dev/null | grep -q "stopped=true"; then
+  err "Termux:Boot versi lama (tidak bisa dibuka)."
+  run "Uninstall versi lama..."
+  su -c "pm uninstall com.termux.boot" >> "$LOG" 2>&1
+  ok "Versi lama dihapus."
+  err "Install Termux:Boot BARU dari F-Droid lalu jalankan ulang install.sh"
+  exit 1
+fi
+ok "Termux:Boot aktif."
 su -c "am force-stop com.termux.boot" 2>/dev/null
-ok "Termux:Boot dibuka."
 
 # Enable receiver + component
 run "Enable boot receiver..."
