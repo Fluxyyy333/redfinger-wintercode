@@ -1,11 +1,9 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# AUTORUN.sh — Boot trigger for Redfinger Optimizer + Wintercode Agent
+# AUTORUN.sh — Boot trigger for Redfinger Optimizer
 # Runs via Termux:Boot on every device restart
 
 LOG="$HOME/boot.log"
 CONFIG="$HOME/.rf_config"
-AGENT_URL="https://api.wintercode.dev/loader/agent-obfuscated.lua"
-AGENT_PATH="/sdcard/Download/agent.lua"
 
 # ── CRITICAL: Survive broken pipes & signals ────────────────
 trap '' PIPE        # Ignore SIGPIPE — prevents "Broken pipe" crash
@@ -58,13 +56,13 @@ for i in $(seq 1 18); do
 done
 [ $CONNECTED -eq 0 ] && log "[!] Internet tidak tersedia — lanjut tanpa network"
 
-# ── [1/3] Optimizer (one-time at boot) ──────────────────────
-log "[*] [1/3] Optimizer..."
+# ── [1/2] Optimizer (one-time at boot) ──────────────────────
+log "[*] [1/2] Optimizer..."
 bash "$HOME/scripts/optimize_rf.sh" >> "$LOG" 2>&1
 log "[+] Optimizer selesai."
 
-# ── [2/3] OOM Watcher — independent daemon ──────────────────
-log "[*] [2/3] OOM Watcher daemon..."
+# ── [2/2] OOM Watcher — independent daemon ──────────────────
+log "[*] [2/2] OOM Watcher daemon..."
 start_oom_watcher() {
   # nohup + setsid = survives parent death
   nohup setsid bash -c '
@@ -76,41 +74,6 @@ start_oom_watcher() {
   log "[+] OOM watcher daemon (PID: $!)"
 }
 start_oom_watcher
-
-# ── [3/3] Wintercode Agent — independent watchdog ────────────
-log "[*] [3/3] Wintercode Agent watchdog..."
-start_agent_watchdog() {
-  if ! command -v lua > /dev/null 2>&1; then
-    log "[!] lua tidak terinstall — skip agent."
-    return 1
-  fi
-  nohup setsid bash -c '
-    LOG="$HOME/boot.log"
-    AGENT_URL="'"$AGENT_URL"'"
-    AGENT_PATH="'"$AGENT_PATH"'"
-    FAIL_COUNT=0
-    while true; do
-      if curl -fsSL --max-time 30 "$AGENT_URL" -o "$AGENT_PATH" 2>> "$LOG"; then
-        if [ -s "$AGENT_PATH" ]; then
-          echo "$(date +%H:%M:%S) [+] Agent download OK — launching (attempt $((FAIL_COUNT + 1)))" >> "$LOG"
-          lua "$AGENT_PATH" </dev/null >> "$LOG" 2>&1
-          echo "$(date +%H:%M:%S) [!] Agent exit (code $?) — akan restart" >> "$LOG"
-        else
-          echo "$(date +%H:%M:%S) [!] Agent file kosong" >> "$LOG"
-        fi
-      else
-        echo "$(date +%H:%M:%S) [!] Download agent gagal" >> "$LOG"
-      fi
-      FAIL_COUNT=$((FAIL_COUNT + 1))
-      WAIT=$(( FAIL_COUNT < 4 ? 15 : (FAIL_COUNT < 8 ? 60 : 120) ))
-      echo "$(date +%H:%M:%S) [*] Restart agent dalam ${WAIT}s (fail #${FAIL_COUNT})" >> "$LOG"
-      sleep $WAIT
-    done
-  ' > /dev/null 2>&1 &
-  log "[+] Agent watchdog (PID: $!)"
-}
-start_agent_watchdog
-
 log "[+] Boot sequence selesai — semua daemon aktif."
 echo "══════════════════════════════" >> "$LOG"
 
@@ -144,15 +107,6 @@ while true; do
     log "[!] OOM watcher tidak ditemukan — restart darurat"
     start_oom_watcher
   fi
-
-  # Cek apakah agent masih berjalan
-  if command -v lua > /dev/null 2>&1; then
-    if ! pgrep -f "lua.*agent" > /dev/null 2>&1; then
-      log "[!] Agent tidak ditemukan — restart darurat"
-      start_agent_watchdog
-    fi
-  fi
-
   # Log heartbeat tiap jam (fault-tolerant)
   MINUTE=$(date +%M 2>/dev/null) || continue
   if [ "${MINUTE:-99}" -lt 5 ] 2>/dev/null; then
