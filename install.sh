@@ -207,7 +207,7 @@ run "Setup modules..."
 timeout 120 lua "$AGENT_PATH" </dev/null >> "$LOG" 2>&1
 RC=$?
 sleep 2
-if [ $RC -eq 124 ]; then
+if [ $RC -eq 600 ]; then
   err "Module setup timeout (120s). Jalankan manual: lua "$AGENT_PATH" lalu ulangi install."
   exit 1
 fi
