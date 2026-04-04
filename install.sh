@@ -141,16 +141,16 @@ fi
 # ── [4/7] Download Scripts ────────────
 echo -e "\n  ${W}[4/7] Download Scripts${R}"
 mkdir -p "$HOME/scripts" "$HOME/.termux/boot"
-for f in autorun.sh scripts/optimize_rf.sh scripts/debloat_rf.sh scripts/oom_watcher.sh; do
+for f in scripts/optimize_rf.sh scripts/debloat_rf.sh scripts/oom_watcher.sh; do
   run "Download $f..."
   curl -fsSL --retry 3 "$BASE_URL/$f" -o "$HOME/$f" 2>> "$LOG"
   [ -s "$HOME/$f" ] && ok "$f" || err "GAGAL: $f"
 done
-# autorun.sh goes to boot dir
-mv "$HOME/autorun.sh" "$HOME/.termux/boot/autorun.sh" 2>/dev/null
-chmod +x "$HOME/.termux/boot/autorun.sh" "$HOME/scripts/"*.sh
+chmod +x "$HOME/scripts/"*.sh
+# Hapus autorun.sh lama dari boot dir (diganti winterhub_agent.sh)
+rm -f "$HOME/.termux/boot/autorun.sh" 2>/dev/null
 # Validasi file kritikal sebelum lanjut
-for _f in "$HOME/.termux/boot/autorun.sh" "$HOME/scripts/optimize_rf.sh" "$HOME/scripts/oom_watcher.sh"; do
+for _f in "$HOME/scripts/optimize_rf.sh" "$HOME/scripts/oom_watcher.sh"; do
   [ -s "$_f" ] || { err "KRITIKAL: $_f tidak ada — abort."; exit 1; }
 done
 ok "Semua script siap."
@@ -288,5 +288,5 @@ echo -e "  OOM   : ${G}Aktif${R}"
 echo -e "  Boot  : ${G}Termux:Boot + .bashrc guard${R}"
 echo "  ─────────────────────────────"
 echo "  Restart Redfinger untuk"
-echo "  aktifkan autorun."
+echo "  aktifkan boot agent."
 echo -e "  Log: ~/install.log\n"
