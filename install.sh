@@ -7,6 +7,8 @@ LOG="$HOME/install.log"
 BASE_URL="https://raw.githubusercontent.com/Fluxyyy333/redfinger-wintercode/main"
 AGENT_URL="https://api.wintercode.dev/loader/agent-obfuscated.lua"
 AGENT_PATH="/sdcard/Download/agent.lua"
+TERMUX_PREFIX="/data/data/com.termux/files/usr"
+WINTERHUB_DIR="$HOME/.winterhub"
 
 R=$'\033[0m'; G=$'\033[0;32m'; E=$'\033[0;31m'; Y=$'\033[0;33m'; C=$'\033[1;36m'; W=$'\033[1;37m'
 
@@ -164,33 +166,92 @@ ok "Optimasi selesai."
 
 # ── [6/7] Wintercode Agent ────────────
 echo -e "\n  ${W}[6/7] Wintercode Agent${R}"
+
+# Wake-lock — cegah Android suspend Termux
+termux-wake-lock 2>/dev/null || true
+ok "Wake-lock aktif."
+
+# Lua detection (multi-version, sesuai developer agent)
+find_lua() {
+  for cmd in lua5.4 lua54 lua5.3 lua53 lua; do
+    local p
+    p=$(command -v "$cmd" 2>/dev/null) && [ -x "$p" ] && { echo "$p"; return 0; }
+  done
+  [ -x "$TERMUX_PREFIX/bin/lua" ] && { echo "$TERMUX_PREFIX/bin/lua"; return 0; }
+  return 1
+}
+
+eval "$(luarocks path 2>/dev/null)" || true
+LUA_BIN=$(find_lua) || { err "Lua tidak ditemukan."; exit 1; }
+ok "Lua: $LUA_BIN ($(${LUA_BIN} -v 2>&1 | head -1))"
+
+# Download agent dengan validasi ukuran (min 1024 bytes)
 run "Download agent.lua..."
-curl -L -o "$AGENT_PATH" "$AGENT_URL" 2>&1 | tee -a "$LOG"
-[ -s "$AGENT_PATH" ] || { err "Download agent gagal."; exit 1; }
-ok "agent.lua downloaded."
+curl -sL -o "$AGENT_PATH.tmp" "$AGENT_URL" 2>> "$LOG"
+if [ -s "$AGENT_PATH.tmp" ] && [ "$(wc -c < "$AGENT_PATH.tmp" | tr -d ' ')" -ge 1024 ]; then
+  mv "$AGENT_PATH.tmp" "$AGENT_PATH"
+  ok "agent.lua downloaded ($(wc -c < "$AGENT_PATH" | tr -d ' ') bytes)"
+else
+  rm -f "$AGENT_PATH.tmp"
+  [ ! -f "$AGENT_PATH" ] && { err "Download agent gagal, tidak ada agent.lua."; exit 1; }
+  err "Download gagal, pakai agent.lua yang sudah ada."
+fi
 
-# Run 1: install modules (cjson dll)
-run "Setup modules..."
-lua "$AGENT_PATH" </dev/null >> "$LOG" 2>&1
-sleep 2
-ok "Modules installed."
-
-# Inject key langsung ke ~/.winterhub/key.txt
+# Inject key
 run "Inject script key..."
-mkdir -p "$HOME/.winterhub"
-printf '%s' "$SCRIPT_KEY" > "$HOME/.winterhub/script_key"
+mkdir -p "$WINTERHUB_DIR"
+printf '%s' "$SCRIPT_KEY" > "$WINTERHUB_DIR/script_key"
+export SCRIPT_KEY
 ok "Key tersimpan di ~/.winterhub/script_key"
 
-# Run 2: actual run (baca key dari file)
-run "Start agent..."
-lua "$AGENT_PATH" </dev/null 2>&1 | tee -a "$LOG"
-sleep 3
-[ -d "$HOME/.winterhub" ] && ok "Agent config OK." || err "Config belum ada. Cek manual."
-AGENT_PID=$(pgrep -f "lua.*agent" 2>/dev/null | head -1)
-[ -n "$AGENT_PID" ] && ok "Agent running (PID: $AGENT_PID)" || err "Agent tidak jalan. Run manual: lua $AGENT_PATH </dev/null"
+# Launch agent (background + nohup + proper flags)
+launch_agent() {
+  eval "$(luarocks path 2>/dev/null)" || true
+  local TOKEN
+  TOKEN=$(cat /proc/sys/kernel/random/uuid 2>/dev/null | tr -d '-' | head -c 32)
+  echo -n "$TOKEN" > "$WINTERHUB_DIR/main.token"
+  cd "$(dirname "$AGENT_PATH")"
+  nohup "$LUA_BIN" "$AGENT_PATH" --main-loop --boot --token "$TOKEN" >> "$LOG" 2>&1 &
+  echo $!
+}
+
+run "Launch agent..."
+AGENT_PID=$(launch_agent)
+sleep 5
+
+# Agent exits 0 setelah first-boot module install — re-launch otomatis
+if ! kill -0 "$AGENT_PID" 2>/dev/null; then
+  run "Re-launch setelah bootstrap modules..."
+  AGENT_PID=$(launch_agent)
+  sleep 3
+fi
+
+# Cgroup escape — krusial di Redfinger agar agent tidak di-kill Android
+for f in /sys/fs/cgroup/uid_0/pid_*/cgroup.procs; do
+  if echo "$AGENT_PID" > "$f" 2>/dev/null; then break; fi
+done
+
+if kill -0 "$AGENT_PID" 2>/dev/null; then
+  ok "Agent running (PID: $AGENT_PID)"
+else
+  err "Agent tidak jalan. Cek ~/install.log"
+fi
+[ -d "$WINTERHUB_DIR" ] && ok "Agent config OK." || err "Config belum ada."
 
 # ── [7/7] Boot Guard ─────────────────
 echo -e "\n  ${W}[7/7] Boot Guard${R}"
+
+# Install winterhub_agent.sh sebagai boot script (dari developer)
+run "Install boot script..."
+curl -fsSL --retry 3 "$BASE_URL/winterhub_agent.sh" -o "$HOME/.termux/boot/winterhub_agent.sh" 2>> "$LOG"
+if [ -s "$HOME/.termux/boot/winterhub_agent.sh" ]; then
+  # Inject SCRIPT_KEY ke boot script
+  sed -i "s/^SCRIPT_KEY=\"\"/SCRIPT_KEY=\"$SCRIPT_KEY\"/" "$HOME/.termux/boot/winterhub_agent.sh"
+  chmod +x "$HOME/.termux/boot/winterhub_agent.sh"
+  ok "winterhub_agent.sh terpasang di ~/.termux/boot/"
+else
+  err "Gagal download boot script."
+fi
 
 # Start OOM watcher for current session
 bash "$HOME/scripts/oom_watcher.sh" >> "$HOME/oom_watcher.log" 2>&1 &
@@ -204,10 +265,10 @@ else
   cat >> "$HOME/.bashrc" << 'BASHRC'
 
 # AUTORUN_GUARD — backup trigger jika Termux:Boot gagal
-if [ -f "$HOME/.termux/boot/autorun.sh" ]; then
-  if ! pgrep -f "oom_watcher.sh" > /dev/null 2>&1; then
-    echo "[.bashrc] Daemon belum jalan — trigger autorun..."
-    nohup bash "$HOME/.termux/boot/autorun.sh" > /dev/null 2>&1 &
+if [ -f "$HOME/.termux/boot/winterhub_agent.sh" ]; then
+  if ! pgrep -f "lua.*agent" > /dev/null 2>&1; then
+    echo "[.bashrc] Agent belum jalan — trigger boot script..."
+    nohup bash "$HOME/.termux/boot/winterhub_agent.sh" > /dev/null 2>&1 &
     disown
   fi
 fi
