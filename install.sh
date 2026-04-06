@@ -109,7 +109,7 @@ pkg_install_retry() {
   return 1
 }
 
-# ── [3/8] Packages ────────────────────
+# ── [3/8] Install Paket ───────────────
 echo -e "\n  ${W}[3/8] Install Paket${R}"
 # Force switch mirror jika default mirror broken (redirect/expired)
 run "Cek mirror saat ini..."
@@ -184,10 +184,10 @@ eval "$(luarocks path 2>/dev/null)" || true
 LUA_BIN=$(find_lua) || { err "Lua tidak ditemukan."; exit 1; }
 ok "Lua: $LUA_BIN ($(${LUA_BIN} -v 2>&1 | head -1))"
 
-# Download agent dengan validasi ukuran (min 1024 bytes)
+# Download agent dengan validasi ukuran (min 300000 bytes)
 run "Download agent.lua..."
-curl -sL -o "$AGENT_PATH.tmp" "$AGENT_URL" 2>> "$LOG"
-if [ -s "$AGENT_PATH.tmp" ] && [ "$(wc -c < "$AGENT_PATH.tmp" | tr -d ' ')" -ge 1024 ]; then
+curl -sL --max-time 30 --connect-timeout 10 -o "$AGENT_PATH.tmp" "$AGENT_URL" 2>> "$LOG"
+if [ -s "$AGENT_PATH.tmp" ] && [ "$(wc -c < "$AGENT_PATH.tmp" | tr -d ' ')" -ge 300000 ]; then
   mv "$AGENT_PATH.tmp" "$AGENT_PATH"
   ok "agent.lua downloaded ($(wc -c < "$AGENT_PATH" | tr -d ' ') bytes)"
 else
@@ -203,37 +203,22 @@ printf '%s' "$SCRIPT_KEY" > "$WINTERHUB_DIR/script_key"
 export SCRIPT_KEY
 ok "Key tersimpan di ~/.winterhub/script_key"
 
-# Launch agent (background + nohup + proper flags)
-launch_agent() {
-  eval "$(luarocks path 2>/dev/null)" || true
-  local TOKEN
-  TOKEN=$(cat /proc/sys/kernel/random/uuid 2>/dev/null | tr -d '-' | head -c 32)
-  echo -n "$TOKEN" > "$WINTERHUB_DIR/main.token"
-  cd "$(dirname "$AGENT_PATH")"
-  nohup "$LUA_BIN" "$AGENT_PATH" --main-loop --boot --token "$TOKEN" >> "$LOG" 2>&1 &
-  echo $!
-}
-
+# Launch agent — agent mengelola PID, cgroup, dan watchdog sendiri
 run "Launch agent..."
-AGENT_PID=$(launch_agent)
-sleep 5
+rm -f "$WINTERHUB_DIR/main.pid" 2>/dev/null
+cd "$(dirname "$AGENT_PATH")"
+"$LUA_BIN" "$AGENT_PATH" > /dev/null 2>&1 &
 
-# Agent exits 0 setelah first-boot module install — re-launch otomatis
-if ! kill -0 "$AGENT_PID" 2>/dev/null; then
-  run "Re-launch setelah bootstrap modules..."
-  AGENT_PID=$(launch_agent)
-  sleep 3
-fi
-
-# Cgroup escape — krusial di Redfinger agar agent tidak di-kill Android
-for f in /sys/fs/cgroup/uid_0/pid_*/cgroup.procs; do
-  if echo "$AGENT_PID" > "$f" 2>/dev/null; then break; fi
+# Tunggu agent tulis PID file (max 30s)
+PWAIT=0
+while [ ! -s "$WINTERHUB_DIR/main.pid" ] && [ $PWAIT -lt 15 ]; do
+  sleep 2; PWAIT=$((PWAIT+1))
 done
-
-if kill -0 "$AGENT_PID" 2>/dev/null; then
-  ok "Agent running (PID: $AGENT_PID)"
+PID=$(cat "$WINTERHUB_DIR/main.pid" 2>/dev/null)
+if [ -n "$PID" ] && su -c "kill -0 $PID" 2>/dev/null; then
+  ok "Agent running (PID: $PID)"
 else
-  err "Agent tidak jalan. Cek ~/install.log"
+  err "Agent tidak terdeteksi — mungkin masih starting. Cek ~/install.log"
 fi
 [ -d "$WINTERHUB_DIR" ] && ok "Agent config OK." || err "Config belum ada."
 
@@ -261,17 +246,16 @@ GUARD_MARKER="# AUTORUN_GUARD"
 if grep -q "$GUARD_MARKER" "$HOME/.bashrc" 2>/dev/null; then
   ok ".bashrc guard sudah ada."
 else
-  cat >> "$HOME/.bashrc" << 'BASHRC'
-
-# AUTORUN_GUARD — backup trigger jika Termux:Boot gagal
-if [ -f "$HOME/.termux/boot/winterhub_agent.sh" ]; then
-  if ! pgrep -f "lua.*agent" > /dev/null 2>&1; then
-    echo "[.bashrc] Agent belum jalan — trigger boot script..."
-    nohup bash "$HOME/.termux/boot/winterhub_agent.sh" > /dev/null 2>&1 &
-    disown
-  fi
-fi
-BASHRC
+  printf '%s\n' \
+    '' \
+    '# AUTORUN_GUARD — backup trigger jika Termux:Boot gagal' \
+    'if [ -f "$HOME/.termux/boot/winterhub_agent.sh" ]; then' \
+    '  if ! pgrep -f "lua.*agent" > /dev/null 2>&1; then' \
+    '    echo "[.bashrc] Agent belum jalan — trigger boot script..."' \
+    '    nohup bash "$HOME/.termux/boot/winterhub_agent.sh" > /dev/null 2>&1 &' \
+    '    disown' \
+    '  fi' \
+    'fi' >> "$HOME/.bashrc"
   ok ".bashrc guard terpasang."
 fi
 
