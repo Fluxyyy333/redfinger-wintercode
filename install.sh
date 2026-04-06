@@ -141,15 +141,15 @@ fi
 # ── [4/7] Download Scripts ────────────
 echo -e "\n  ${W}[4/7] Download Scripts${R}"
 mkdir -p "$HOME/scripts" "$HOME/.termux/boot"
-for f in autorun.sh scripts/optimize_rf.sh scripts/debloat_rf.sh scripts/oom_watcher.sh; do
+for f in z_autorun.sh scripts/optimize_rf.sh scripts/debloat_rf.sh scripts/oom_watcher.sh; do
   run "Download $f..."
   curl -fsSL --retry 3 "$BASE_URL/$f" -o "$HOME/$f" 2>> "$LOG"
   [ -s "$HOME/$f" ] && ok "$f" || err "GAGAL: $f"
 done
-mv "$HOME/autorun.sh" "$HOME/.termux/boot/autorun.sh" 2>/dev/null
-chmod +x "$HOME/.termux/boot/autorun.sh" "$HOME/scripts/"*.sh
+mv "$HOME/z_autorun.sh" "$HOME/.termux/boot/z_autorun.sh" 2>/dev/null
+chmod +x "$HOME/.termux/boot/z_autorun.sh" "$HOME/scripts/"*.sh
 # Validasi file kritikal sebelum lanjut
-for _f in "$HOME/.termux/boot/autorun.sh" "$HOME/scripts/optimize_rf.sh" "$HOME/scripts/oom_watcher.sh"; do
+for _f in "$HOME/.termux/boot/z_autorun.sh" "$HOME/scripts/optimize_rf.sh" "$HOME/scripts/oom_watcher.sh"; do
   [ -s "$_f" ] || { err "KRITIKAL: $_f tidak ada — abort."; exit 1; }
 done
 ok "Semua script siap."
