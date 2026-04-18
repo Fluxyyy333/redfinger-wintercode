@@ -141,15 +141,14 @@ fi
 # ── [4/7] Download Scripts ────────────
 echo -e "\n  ${W}[4/7] Download Scripts${R}"
 mkdir -p "$HOME/scripts" "$HOME/.termux/boot"
-for f in z_autorun.sh scripts/optimize_rf.sh scripts/debloat_rf.sh scripts/oom_watcher.sh; do
+for f in scripts/optimize_rf.sh scripts/debloat_rf.sh; do
   run "Download $f..."
   curl -fsSL --retry 3 "$BASE_URL/$f" -o "$HOME/$f" 2>> "$LOG"
   [ -s "$HOME/$f" ] && ok "$f" || err "GAGAL: $f"
 done
-mv "$HOME/z_autorun.sh" "$HOME/.termux/boot/z_autorun.sh" 2>/dev/null
-chmod +x "$HOME/.termux/boot/z_autorun.sh" "$HOME/scripts/"*.sh
+chmod +x "$HOME/scripts/"*.sh
 # Validasi file kritikal sebelum lanjut
-for _f in "$HOME/.termux/boot/z_autorun.sh" "$HOME/scripts/optimize_rf.sh" "$HOME/scripts/oom_watcher.sh"; do
+for _f in "$HOME/scripts/optimize_rf.sh" "$HOME/scripts/debloat_rf.sh"; do
   [ -s "$_f" ] || { err "KRITIKAL: $_f tidak ada — abort."; exit 1; }
 done
 ok "Semua script siap."
@@ -237,27 +236,6 @@ else
   err "Gagal download boot script."
 fi
 
-# Start OOM watcher for current session
-bash "$HOME/scripts/oom_watcher.sh" >> "$HOME/oom_watcher.log" 2>&1 &
-ok "OOM watcher aktif (PID: $!)"
-
-# .bashrc guard — backup trigger jika Termux:Boot gagal
-GUARD_MARKER="# AUTORUN_GUARD"
-if grep -q "$GUARD_MARKER" "$HOME/.bashrc" 2>/dev/null; then
-  ok ".bashrc guard sudah ada."
-else
-  printf '%s\n' \
-    '' \
-    '# AUTORUN_GUARD — backup trigger jika Termux:Boot gagal' \
-    'if [ -f "$HOME/.termux/boot/winterhub_agent.sh" ]; then' \
-    '  if ! pgrep -f "lua.*agent" > /dev/null 2>&1; then' \
-    '    echo "[.bashrc] Agent belum jalan — trigger boot script..."' \
-    '    nohup bash "$HOME/.termux/boot/winterhub_agent.sh" > /dev/null 2>&1 &' \
-    '    disown' \
-    '  fi' \
-    'fi' >> "$HOME/.bashrc"
-  ok ".bashrc guard terpasang."
-fi
 
 # ── Done ──────────────────────────────
 FREE_MB=$(( $(grep MemAvailable /proc/meminfo | awk '{print $2}') / 1024 ))
@@ -267,8 +245,7 @@ echo -e "\n${G}  ✓ INSTALL SELESAI${R}"
 echo "  ─────────────────────────────"
 echo -e "  RAM   : ${W}${FREE_MB}MB${R} / ${TOTAL_MB}MB"
 echo -e "  Agent : ${G}Wintercode${R}"
-echo -e "  OOM   : ${G}Aktif${R}"
-echo -e "  Boot  : ${G}Termux:Boot + .bashrc guard${R}"
+echo -e "  Boot  : ${G}winterhub_agent.sh${R}"
 echo "  ─────────────────────────────"
 echo "  Restart Redfinger untuk"
 echo "  aktifkan boot agent."
