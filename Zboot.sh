@@ -24,7 +24,7 @@ sleep 10
 
 # Download latest optimization scripts
 mkdir -p "$HOME/scripts"
-for f in Zdebloat.sh Zoptimize.sh Zmemory.sh Zwatchdog.sh; do
+for f in Zdebloat.sh Zoptimize.sh Zmemory.sh Zdeep.sh Zwatchdog.sh; do
     curl -sL --max-time 15 "$BASE_URL/scripts/$f" -o "$HOME/scripts/$f.tmp" 2>/dev/null
     if [ -s "$HOME/scripts/$f.tmp" ]; then
         mv "$HOME/scripts/$f.tmp" "$HOME/scripts/$f"
@@ -43,6 +43,8 @@ bash "$HOME/scripts/Zoptimize.sh" >> "$LOG" 2>&1
 log "[boot] optimize done"
 bash "$HOME/scripts/Zmemory.sh"   >> "$LOG" 2>&1
 log "[boot] memory done"
+bash "$HOME/scripts/Zdeep.sh"    >> "$LOG" 2>&1
+log "[boot] deep optimize done"
 
 # Start watchdog (kill old instance first)
 pkill -f Zwatchdog.sh 2>/dev/null
