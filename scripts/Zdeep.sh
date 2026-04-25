@@ -21,8 +21,10 @@ echo "[+] Phase 1: AM constants set" >> "$LOG"
 
 # ── PHASE 2: Uninstall persistent system services (user 0) ──
 # pm uninstall is stronger than pm disable — prevents system_server from respawning
+# NOTE: com.android.systemui MUST NOT be uninstalled — it breaks
+# WindowManager overlay policy (mPolicyVisibility=false) which
+# prevents Delta executor autoexec from running.
 for pkg in \
-    com.android.systemui \
     com.android.phone \
     com.android.providers.media \
     com.android.plugin \
@@ -75,7 +77,7 @@ done
 echo "[+] Phase 3: ${#GMS_DISABLE[@]} GMS components disabled" >> "$LOG"
 
 # ── PHASE 4: OOM Score + Priority Demotion ───────────────────
-BLOAT_PROCS="com.android.systemui com.android.phone android.process.media com.android.plugin com.android.datatransport com.android.se com.android.keychain com.google.process.gservices com.google.process.gapps"
+BLOAT_PROCS="com.android.phone android.process.media com.android.plugin com.android.datatransport com.android.se com.android.keychain com.google.process.gservices com.google.process.gapps"
 for P in $BLOAT_PROCS; do
     PID=$(su -c "pidof $P" 2>/dev/null)
     if [ -n "$PID" ]; then
@@ -86,7 +88,7 @@ done
 echo "[+] Phase 4: OOM scores set" >> "$LOG"
 
 # ── PHASE 5: Memory Trim (aggressive) ────────────────────────
-TRIM_TARGETS="com.google.android.gms com.google.android.gms.persistent com.google.process.gservices com.google.process.gapps com.android.systemui android.process.media com.android.phone com.android.keychain"
+TRIM_TARGETS="com.google.android.gms com.google.android.gms.persistent com.google.process.gservices com.google.process.gapps android.process.media com.android.phone com.android.keychain"
 for T in $TRIM_TARGETS; do
     su -c "am send-trim-memory $T COMPLETE" 2>/dev/null
 done
