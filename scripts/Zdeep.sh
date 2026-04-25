@@ -12,8 +12,8 @@ su -c "id" > /dev/null 2>&1 || { echo "[!] ROOT GAGAL" >> "$LOG"; exit 1; }
 M_BEFORE=$(( $(grep MemAvailable /proc/meminfo | awk '{print $2}') / 1024 ))
 
 # ── PHASE 1: Activity Manager Constants ──────────────────────
-su -c "settings put global activity_manager_constants max_cached_processes=2,background_settle_time=5000,fgs_bg_restriction_enabled=true" 2>/dev/null
-su -c "settings put global always_finish_activities 1" 2>/dev/null
+su -c "settings put global activity_manager_constants max_cached_processes=4,background_settle_time=5000,fgs_bg_restriction_enabled=true" 2>/dev/null
+su -c "settings put global always_finish_activities 0" 2>/dev/null
 su -c "settings put global cached_apps_freezer enabled" 2>/dev/null
 su -c "settings put global settings_enable_monitor_phantom_procs false" 2>/dev/null
 su -c "settings put secure location_providers_allowed -gps,-network" 2>/dev/null
