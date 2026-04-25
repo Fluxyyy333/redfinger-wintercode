@@ -133,14 +133,14 @@ dis "com.android.internal.systemui.navbar.gestural_wide_back"
 dis "com.android.internal.systemui.navbar.twobutton"
 echo "[+] Blok 7: Overlays" >> "$LOG"
 
-# ── BLOK 8: HEADLESS UI (disable all UI except SystemUI) ──
+# ── BLOK 8: HEADLESS UI (disable non-essential UI except SystemUI) ──
 # NEVER disable systemui — breaks WindowManager overlay policy
-# (mPolicyVisibility=false → Delta autoexec won't run)
-dis "com.android.launcher3"
-dis "com.wsh.launcher"
+# NEVER disable launchers — pm disable persists across reboot and
+# prevents BOOT_COMPLETED broadcast → Termux:Boot won't fire.
+# Zwatchdog.sh handles launchers via force-stop every 60s instead.
 dis "com.android.settings"
 dis "com.android.documentsui"
-echo "[+] Blok 8: Headless UI (launcher+settings OFF)" >> "$LOG"
+echo "[+] Blok 8: Headless UI (settings+docs OFF, launchers kept for boot)" >> "$LOG"
 
 # ── BLOK 9: CAMERA / NFC / USB ───────────────────────────────
 dis "com.android.camera2"
