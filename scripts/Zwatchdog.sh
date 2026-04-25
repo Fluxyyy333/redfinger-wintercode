@@ -79,7 +79,7 @@ while true; do
     LUA_PID=$(pgrep -n lua 2>/dev/null)
     [ -n "$LUA_PID" ] && su -c "echo -300 > /proc/$LUA_PID/oom_score_adj" 2>/dev/null
 
-    GAME_PIDS=$(su -c "ps -A 2>/dev/null | grep -E 'com\.fluxy|com\.deltb|com\.roblox' | awk '{print \$2}'")
+    GAME_PIDS=$(su -c "ps -A 2>/dev/null | grep -E 'com\.fluxy|com\.delt|com\.roblox' | awk '{print \$2}'")
     GAME_COUNT=0
     for pid in $GAME_PIDS; do
         [ -n "$pid" ] && su -c "echo -200 > /proc/$pid/oom_score_adj" 2>/dev/null && GAME_COUNT=$((GAME_COUNT + 1))
@@ -124,7 +124,7 @@ while true; do
     # ── CRITICAL MEMORY: emergency ─────────────────────────────
     if [ $FREE_MB -lt $CRIT_MEM_THRESHOLD ]; then
         log "[watchdog] CRITICAL: ${FREE_MB}MB — emergency"
-        RUNNING=$(su -c "ps -A 2>/dev/null" | grep -vE 'com\.fluxy|com\.deltb|com\.roblox|com\.termux|system_server|zygote|servicemanager|surfaceflinger|vold|logd|adbd|lua' | awk 'NR>1{print $NF}' | sort -u)
+        RUNNING=$(su -c "ps -A 2>/dev/null" | grep -vE 'com\.fluxy|com\.delt|com\.roblox|com\.termux|system_server|zygote|servicemanager|surfaceflinger|vold|logd|adbd|lua' | awk 'NR>1{print $NF}' | sort -u)
         for proc in $RUNNING; do
             su -c "am send-trim-memory $proc COMPLETE" 2>/dev/null
         done

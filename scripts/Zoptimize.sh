@@ -39,11 +39,13 @@ su -c "settings put global force_4x_msaa 0" 2>/dev/null
 su -c "settings put global enable_gpu_debug_layers 0" 2>/dev/null
 su -c "settings put global disable_overlays 0" 2>/dev/null
 su -c "appops set com.deltb SYSTEM_ALERT_WINDOW allow" 2>/dev/null
+su -c "appops set com.deltc SYSTEM_ALERT_WINDOW allow" 2>/dev/null
+su -c "appops set com.deltd SYSTEM_ALERT_WINDOW allow" 2>/dev/null
 echo "[+] 3/7 GPU tuning (overlays kept for Delta)" >> "$LOG"
 
 # ── [4/7] Doze Mode ────────────────────────────────────────────
 su -c "dumpsys deviceidle disable" >> "$LOG" 2>&1
-FLUXY_PKGS=$(su -c "pm list packages 2>/dev/null | grep 'com\.fluxy\|com\.deltb' | sed 's/package://'")
+FLUXY_PKGS=$(su -c "pm list packages 2>/dev/null | grep 'com\.fluxy\|com\.delt' | sed 's/package://'")
 COUNT=0
 for pkg in $FLUXY_PKGS; do
     su -c "dumpsys deviceidle whitelist +$pkg 2>/dev/null"
@@ -70,7 +72,7 @@ for pid in $TERMUX_PIDS; do
 done
 LUA_PID=$(pgrep -n lua 2>/dev/null)
 [ -n "$LUA_PID" ] && su -c "echo -300 > /proc/$LUA_PID/oom_score_adj" 2>/dev/null
-GAME_PIDS=$(su -c "ps -A 2>/dev/null | grep -E 'com\.fluxy|com\.deltb|com\.roblox' | awk '{print \$2}'")
+GAME_PIDS=$(su -c "ps -A 2>/dev/null | grep -E 'com\.fluxy|com\.delt|com\.roblox' | awk '{print \$2}'")
 GAME_COUNT=0
 for pid in $GAME_PIDS; do
     [ -z "$pid" ] && continue

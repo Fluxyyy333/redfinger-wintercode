@@ -105,6 +105,8 @@ echo "[+] Phase 6: Caches purged" >> "$LOG"
 # ── PHASE 7: Doze + Whitelist ─────────────────────────────────
 su -c "dumpsys deviceidle whitelist +com.termux" 2>/dev/null
 su -c "dumpsys deviceidle whitelist +com.deltb" 2>/dev/null
+su -c "dumpsys deviceidle whitelist +com.deltc" 2>/dev/null
+su -c "dumpsys deviceidle whitelist +com.deltd" 2>/dev/null
 su -c "dumpsys deviceidle whitelist +com.fluxy.one" 2>/dev/null
 su -c "dumpsys deviceidle whitelist +com.fluxy.two" 2>/dev/null
 su -c "dumpsys deviceidle whitelist +com.fluxy.three" 2>/dev/null
