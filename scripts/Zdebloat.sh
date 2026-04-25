@@ -135,9 +135,10 @@ echo "[+] Blok 7: Overlays" >> "$LOG"
 
 # ── BLOK 8: HEADLESS UI (disable non-essential UI except SystemUI) ──
 # NEVER disable systemui — breaks WindowManager overlay policy
-# NEVER disable launchers — pm disable persists across reboot and
+# NEVER disable launcher3 — pm disable persists across reboot and
 # prevents BOOT_COMPLETED broadcast → Termux:Boot won't fire.
-# Zwatchdog.sh handles launchers via force-stop every 60s instead.
+# Zwatchdog.sh handles launcher via force-stop every 60s instead.
+# Note: com.wsh.launcher doesn't exist on RF devices (confirmed).
 dis "com.android.settings"
 dis "com.android.documentsui"
 echo "[+] Blok 8: Headless UI (settings+docs OFF, launchers kept for boot)" >> "$LOG"
