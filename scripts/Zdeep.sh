@@ -19,11 +19,10 @@ su -c "settings put global settings_enable_monitor_phantom_procs false" 2>/dev/n
 su -c "settings put secure location_providers_allowed -gps,-network" 2>/dev/null
 echo "[+] Phase 1: AM constants set" >> "$LOG"
 
-# ── PHASE 2: Uninstall persistent system services (user 0) ──
-# pm uninstall is stronger than pm disable — prevents system_server from respawning
-# NOTE: com.android.systemui MUST NOT be uninstalled — it breaks
-# WindowManager overlay policy (mPolicyVisibility=false) which
-# prevents Delta executor autoexec from running.
+# ── PHASE 2: Kill persistent system services ─────────────────
+# BOOT-SAFE: uses force-stop + OOM demotion instead of pm uninstall.
+# pm uninstall -k --user 0 persists across reboot and can block
+# BOOT_COMPLETED delivery → Termux:Boot won't fire.
 for pkg in \
     com.android.phone \
     com.android.providers.media \
@@ -31,10 +30,11 @@ for pkg in \
     com.android.se \
     com.android.keychain \
     com.android.datatransport; do
-    su -c "pm uninstall -k --user 0 $pkg" >> "$LOG" 2>&1
+    su -c "am force-stop $pkg" 2>/dev/null
+    PID=$(su -c "pidof $pkg" 2>/dev/null)
+    [ -n "$PID" ] && su -c "echo 1000 > /proc/$PID/oom_score_adj" 2>/dev/null
 done
-sleep 3
-echo "[+] Phase 2: Persistent services uninstalled" >> "$LOG"
+echo "[+] Phase 2: Persistent services killed + demoted" >> "$LOG"
 
 # ── PHASE 3: GMS Component Disabling (non-essential services) ─
 GMS_DISABLE=(

@@ -3,97 +3,101 @@
 # Redfinger Android 10 ARM64 | Target: 8 Roblox instances on 4GB RAM
 # Device fully agent-controlled — NO human interaction needed
 # Safe to re-run (idempotent)
+#
+# BOOT-SAFE: Uses am force-stop (non-persistent) instead of pm disable-user.
+# pm disable-user persists across reboot and can block BOOT_COMPLETED
+# delivery, which prevents Termux:Boot from firing.
+# Zwatchdog.sh re-kills these packages every 60s to keep them dead.
 
 LOG="${LOG:-$HOME/Zdebloat.log}"
 echo "=== ZDEBLOAT: $(date) ===" >> "$LOG"
 
-dis() { su -c "pm disable-user --user 0 $1 >> $LOG 2>&1 && am force-stop $1 2>/dev/null"; }
-uni() { su -c "pm uninstall -k --user 0 $1 >> $LOG 2>&1 && am force-stop $1 2>/dev/null"; }
+fstop() { su -c "am force-stop $1" 2>/dev/null; }
 
 su -c "id" > /dev/null 2>&1 || { echo "[!] ROOT GAGAL" >> "$LOG"; exit 1; }
 
 # ── BLOK 1: PHONE / SIM ──────────────────────────────────────
-dis "com.android.phone"
-dis "com.android.server.telecom"
-dis "com.android.dialer"
-dis "com.android.calllogbackup"
-dis "com.android.simappdialog"
-dis "com.android.carrierconfig"
-dis "com.android.carrierdefaultapp"
-dis "com.android.cellbroadcastreceiver"
-dis "com.android.smspush"
-dis "com.android.ons"
-dis "com.android.mms.service"
-dis "com.android.hotspot2"
+fstop "com.android.phone"
+fstop "com.android.server.telecom"
+fstop "com.android.dialer"
+fstop "com.android.calllogbackup"
+fstop "com.android.simappdialog"
+fstop "com.android.carrierconfig"
+fstop "com.android.carrierdefaultapp"
+fstop "com.android.cellbroadcastreceiver"
+fstop "com.android.smspush"
+fstop "com.android.ons"
+fstop "com.android.mms.service"
+fstop "com.android.hotspot2"
 echo "[+] Blok 1: Phone/SIM" >> "$LOG"
 
 # ── BLOK 2: GOOGLE APPS ──────────────────────────────────────
-dis "com.google.android.gsf.login"
-dis "com.google.android.inputmethod.latin"
-dis "com.google.android.play.games"
-dis "com.google.android.tts"
-dis "com.google.android.feedback"
-dis "com.google.android.apps.restore"
-dis "com.google.android.configupdater"
-dis "com.google.android.partnersetup"
-dis "com.google.android.setupwizard"
-dis "com.google.android.backuptransport"
-dis "com.google.android.apps.nbu.files"
-dis "com.google.android.ext.shared"
-dis "com.google.android.printservice.recommendation"
+fstop "com.google.android.gsf.login"
+fstop "com.google.android.inputmethod.latin"
+fstop "com.google.android.play.games"
+fstop "com.google.android.tts"
+fstop "com.google.android.feedback"
+fstop "com.google.android.apps.restore"
+fstop "com.google.android.configupdater"
+fstop "com.google.android.partnersetup"
+fstop "com.google.android.setupwizard"
+fstop "com.google.android.backuptransport"
+fstop "com.google.android.apps.nbu.files"
+fstop "com.google.android.ext.shared"
+fstop "com.google.android.printservice.recommendation"
 echo "[+] Blok 2: Google Apps" >> "$LOG"
 
 # ── BLOK 3: ANDROID SYSTEM BLOAT ─────────────────────────────
-dis "com.android.bluetooth"
-dis "com.android.bluetoothmidiservice"
-dis "com.android.chrome"
-dis "com.android.email"
-dis "com.android.calendar"
-dis "com.android.messaging"
-dis "com.android.contacts"
-dis "com.android.deskclock"
-dis "com.android.emergency"
-dis "com.android.gallery3d"
-dis "com.android.music"
-dis "com.android.musicfx"
-dis "com.android.soundrecorder"
-dis "com.android.dreams.basic"
-dis "com.android.dreams.phototable"
-dis "com.android.mtp"
-dis "com.android.se"
-dis "com.android.printspooler"
-dis "com.android.printservice.recommendation"
-dis "com.android.bips"
-dis "com.android.bookmarkprovider"
-dis "com.android.quicksearchbox"
-dis "com.android.inputmethod.latin"
-dis "com.android.onetimeinitializer"
-dis "com.android.managedprovisioning"
-dis "com.android.traceur"
-dis "com.android.egg"
-dis "com.android.wallpaper.livepicker"
-dis "com.android.wallpaperbackup"
-dis "com.android.wallpapercropper"
-dis "com.android.wallpaperpicker"
-dis "com.android.htmlviewer"
-dis "com.android.pacprocessor"
+fstop "com.android.bluetooth"
+fstop "com.android.bluetoothmidiservice"
+fstop "com.android.chrome"
+fstop "com.android.email"
+fstop "com.android.calendar"
+fstop "com.android.messaging"
+fstop "com.android.contacts"
+fstop "com.android.deskclock"
+fstop "com.android.emergency"
+fstop "com.android.gallery3d"
+fstop "com.android.music"
+fstop "com.android.musicfx"
+fstop "com.android.soundrecorder"
+fstop "com.android.dreams.basic"
+fstop "com.android.dreams.phototable"
+fstop "com.android.mtp"
+fstop "com.android.se"
+fstop "com.android.printspooler"
+fstop "com.android.printservice.recommendation"
+fstop "com.android.bips"
+fstop "com.android.bookmarkprovider"
+fstop "com.android.quicksearchbox"
+fstop "com.android.inputmethod.latin"
+fstop "com.android.onetimeinitializer"
+fstop "com.android.managedprovisioning"
+fstop "com.android.traceur"
+fstop "com.android.egg"
+fstop "com.android.wallpaper.livepicker"
+fstop "com.android.wallpaperbackup"
+fstop "com.android.wallpapercropper"
+fstop "com.android.wallpaperpicker"
+fstop "com.android.htmlviewer"
+fstop "com.android.pacprocessor"
 echo "[+] Blok 3: System Bloat" >> "$LOG"
 
 # ── BLOK 4: PROVIDERS ────────────────────────────────────────
-dis "com.android.providers.calendar"
-dis "com.android.providers.userdictionary"
-dis "com.android.providers.blockednumber"
-dis "com.android.providers.contacts"
-dis "com.android.providers.downloads"
-dis "com.android.providers.downloads.ui"
-dis "com.android.providers.telephony"
-dis "com.android.providers.partnerbookmarks"
+fstop "com.android.providers.calendar"
+fstop "com.android.providers.userdictionary"
+fstop "com.android.providers.blockednumber"
+fstop "com.android.providers.contacts"
+fstop "com.android.providers.downloads"
+fstop "com.android.providers.downloads.ui"
+fstop "com.android.providers.telephony"
+fstop "com.android.providers.partnerbookmarks"
 echo "[+] Blok 4: Providers" >> "$LOG"
 
 # ── BLOK 5: REDFINGER / VENDOR BLOAT ─────────────────────────
-dis "com.baidu.cloud.service"
-dis "com.wsh.appstore"
-dis "com.wshl.file.observerservice"
+fstop "com.baidu.cloud.service"
+fstop "com.wsh.appstore"
+fstop "com.wshl.file.observerservice"
 echo "[+] Blok 5: Vendor Bloat" >> "$LOG"
 
 # ── BLOK 6: THEME & COLOR & ICON PACKS ───────────────────────
@@ -118,50 +122,48 @@ for pkg in \
   com.android.theme.icon_pack.rounded.launcher \
   com.android.theme.icon_pack.rounded.settings \
   com.android.theme.icon_pack.rounded.systemui; do
-  dis "$pkg"
+  fstop "$pkg"
 done
 echo "[+] Blok 6: Themes/Icons" >> "$LOG"
 
 # ── BLOK 7: NAVBAR & DISPLAY OVERLAYS ────────────────────────
-dis "com.android.internal.display.cutout.emulation.corner"
-dis "com.android.internal.display.cutout.emulation.double"
-dis "com.android.internal.display.cutout.emulation.tall"
-dis "com.android.internal.systemui.navbar.gestural"
-dis "com.android.internal.systemui.navbar.gestural_extra_wide_back"
-dis "com.android.internal.systemui.navbar.gestural_narrow_back"
-dis "com.android.internal.systemui.navbar.gestural_wide_back"
-dis "com.android.internal.systemui.navbar.twobutton"
+fstop "com.android.internal.display.cutout.emulation.corner"
+fstop "com.android.internal.display.cutout.emulation.double"
+fstop "com.android.internal.display.cutout.emulation.tall"
+fstop "com.android.internal.systemui.navbar.gestural"
+fstop "com.android.internal.systemui.navbar.gestural_extra_wide_back"
+fstop "com.android.internal.systemui.navbar.gestural_narrow_back"
+fstop "com.android.internal.systemui.navbar.gestural_wide_back"
+fstop "com.android.internal.systemui.navbar.twobutton"
 echo "[+] Blok 7: Overlays" >> "$LOG"
 
-# ── BLOK 8: HEADLESS UI (disable non-essential UI except SystemUI) ──
-# NEVER disable systemui — breaks WindowManager overlay policy
-# NEVER disable launcher3 — pm disable persists across reboot and
-# prevents BOOT_COMPLETED broadcast → Termux:Boot won't fire.
-# Zwatchdog.sh handles launcher via force-stop every 60s instead.
-# Note: com.wsh.launcher doesn't exist on RF devices (confirmed).
-dis "com.android.settings"
-dis "com.android.documentsui"
-echo "[+] Blok 8: Headless UI (settings+docs OFF, launchers kept for boot)" >> "$LOG"
+# ── BLOK 8: HEADLESS UI ──────────────────────────────────────
+# NEVER pm-disable systemui — breaks overlay mPolicyVisibility
+# NEVER pm-disable launcher3 — blocks BOOT_COMPLETED
+# Zwatchdog.sh handles both via force-stop every 60s instead.
+fstop "com.android.settings"
+fstop "com.android.documentsui"
+echo "[+] Blok 8: Headless UI (force-stop only, boot-safe)" >> "$LOG"
 
 # ── BLOK 9: CAMERA / NFC / USB ───────────────────────────────
-dis "com.android.camera2"
-dis "com.android.camera"
-dis "com.android.nfc"
-dis "com.android.nfc.helper"
-dis "com.android.usb"
+fstop "com.android.camera2"
+fstop "com.android.camera"
+fstop "com.android.nfc"
+fstop "com.android.nfc.helper"
+fstop "com.android.usb"
 echo "[+] Blok 9: Camera/NFC/USB" >> "$LOG"
 
 # ── BLOK 10: STORAGE / MISC SYSTEM ───────────────────────────
-dis "com.android.storagemanager"
-dis "com.android.companiondevicemanager"
-dis "com.android.vpndialogs"
-dis "com.android.stk"
-dis "com.android.certinstaller"
-dis "com.android.backupconfirm"
-dis "com.android.sharedstoragebackup"
-dis "com.android.dynsystem"
-dis "com.android.cts.priv.ctsshim"
-dis "com.android.cts.ctsshim"
+fstop "com.android.storagemanager"
+fstop "com.android.companiondevicemanager"
+fstop "com.android.vpndialogs"
+fstop "com.android.stk"
+fstop "com.android.certinstaller"
+fstop "com.android.backupconfirm"
+fstop "com.android.sharedstoragebackup"
+fstop "com.android.dynsystem"
+fstop "com.android.cts.priv.ctsshim"
+fstop "com.android.cts.ctsshim"
 echo "[+] Blok 10: Storage/Misc" >> "$LOG"
 
 # ── BLOK 11: SCANNING & LOCATION OFF ─────────────────────────

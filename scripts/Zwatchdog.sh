@@ -18,6 +18,10 @@ BLOAT_KILL_LIST=(
     "com.google.android.play.games"
     "com.android.inputmethod.latin"
     "com.android.phone"
+    "com.android.server.telecom"
+    "com.android.dialer"
+    "com.android.bluetooth"
+    "com.android.contacts"
     "com.wsh.appstore"
     "com.android.email"
     "com.android.messaging"
@@ -26,10 +30,14 @@ BLOAT_KILL_LIST=(
     "com.baidu.cloud.service"
     "com.wshl.file.observerservice"
     "com.android.launcher3"
-    "com.wsh.launcher"
     "com.android.settings"
+    "com.android.documentsui"
     "com.google.android.tts"
     "com.android.keychain"
+    "com.google.android.setupwizard"
+    "com.google.android.gsf.login"
+    "com.android.nfc"
+    "com.android.providers.downloads"
 )
 
 PERSISTENT_KILL=(
