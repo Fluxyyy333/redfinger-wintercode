@@ -1,6 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # INSTALL.sh — Redfinger Optimizer + Wintercode Agent
 # Redfinger Android 10 ARM64 | Roblox Multi-Instance
+# Uses boot-safe Z-scripts (force-stop only, NO pm disable-user)
 
 CONFIG="$HOME/.rf_config"
 LOG="$HOME/install.log"
@@ -56,14 +57,8 @@ switch_mirror() {
   local mirror="${FALLBACK_MIRRORS[$_MIRROR_IDX]}"
   _MIRROR_IDX=$(( (_MIRROR_IDX + 1) % ${#FALLBACK_MIRRORS[@]} ))
   run "Switch mirror → $mirror"
-
-  # Clear cached apt lists — tanpa ini apt masih pakai metadata rusak
   rm -rf "$APT_LISTS"/* 2>/dev/null
-
-  # Tulis mirror baru ke sources.list
   echo "deb $mirror stable main" > "$APT_DIR/sources.list"
-
-  # Update sources.list.d/ jika ada (repo tambahan)
   if [ -d "$APT_DIR/sources.list.d" ]; then
     for f in "$APT_DIR/sources.list.d"/*.list; do
       [ -f "$f" ] || continue
@@ -111,7 +106,6 @@ pkg_install_retry() {
 
 # ── [3/8] Install Paket ───────────────
 echo -e "\n  ${W}[3/8] Install Paket${R}"
-# Force switch mirror jika default mirror broken (redirect/expired)
 run "Cek mirror saat ini..."
 CURRENT_MIRROR=$(head -1 "$APT_DIR/sources.list" 2>/dev/null | awk '{print $2}')
 if echo "$CURRENT_MIRROR" | grep -qvE "packages-cf.termux.dev|packages.termux.dev|grimler.se|quantum5.ca|tuna.tsinghua|ustc.edu"; then
@@ -130,7 +124,6 @@ pkg_install_retry lua53
 run "pkg install tsu..."
 pkg_install_retry tsu
 
-# Verify lua
 if command -v lua > /dev/null 2>&1; then
   ok "lua OK: $(lua -v 2>&1 | head -1)"
 else
@@ -138,38 +131,62 @@ else
   exit 1
 fi
 
-# ── [4/7] Download Scripts ────────────
-echo -e "\n  ${W}[4/7] Download Scripts${R}"
+# ── [4/8] Download Z-Scripts ──────────
+echo -e "\n  ${W}[4/8] Download Z-Scripts${R}"
 mkdir -p "$HOME/scripts" "$HOME/.termux/boot"
-for f in scripts/optimize_rf.sh scripts/debloat_rf.sh; do
-  run "Download $f..."
-  curl -fsSL --retry 3 "$BASE_URL/$f" -o "$HOME/$f" 2>> "$LOG"
-  [ -s "$HOME/$f" ] && ok "$f" || err "GAGAL: $f"
+
+# Download boot-safe optimization scripts
+for f in Zdebloat.sh Zoptimize.sh Zmemory.sh Zdeep.sh Zwatchdog.sh; do
+  run "Download scripts/$f..."
+  curl -fsSL --retry 3 "$BASE_URL/scripts/$f" -o "$HOME/scripts/$f" 2>> "$LOG"
+  [ -s "$HOME/scripts/$f" ] && ok "$f" || err "GAGAL: $f"
 done
 chmod +x "$HOME/scripts/"*.sh
-# Validasi file kritikal sebelum lanjut
-for _f in "$HOME/scripts/optimize_rf.sh" "$HOME/scripts/debloat_rf.sh"; do
+
+# Download Zboot.sh (boot chain orchestrator)
+run "Download Zboot.sh..."
+curl -fsSL --retry 3 "$BASE_URL/Zboot.sh" -o "$HOME/.termux/boot/Zboot.sh" 2>> "$LOG"
+if [ -s "$HOME/.termux/boot/Zboot.sh" ]; then
+  chmod +x "$HOME/.termux/boot/Zboot.sh"
+  ok "Zboot.sh → ~/.termux/boot/"
+else
+  err "GAGAL: Zboot.sh"
+fi
+
+# Validate critical files
+for _f in "$HOME/scripts/Zdebloat.sh" "$HOME/scripts/Zoptimize.sh" "$HOME/scripts/Zmemory.sh" "$HOME/scripts/Zdeep.sh" "$HOME/scripts/Zwatchdog.sh"; do
   [ -s "$_f" ] || { err "KRITIKAL: $_f tidak ada — abort."; exit 1; }
 done
-ok "Semua script siap."
+ok "Semua Z-scripts siap."
 
-# ── [5/7] Debloat & Optimasi ──────────
-echo -e "\n  ${W}[5/7] Debloat & Optimasi${R}"
-run "debloat_rf.sh..."
-bash "$HOME/scripts/debloat_rf.sh" >> "$LOG" 2>&1
+# ── [5/8] Debloat & Optimasi ──────────
+echo -e "\n  ${W}[5/8] Debloat & Optimasi${R}"
+run "Zdebloat.sh (force-stop only, boot-safe)..."
+bash "$HOME/scripts/Zdebloat.sh" >> "$LOG" 2>&1
 ok "Debloat selesai."
-run "optimize_rf.sh..."
-bash "$HOME/scripts/optimize_rf.sh" >> "$LOG" 2>&1
+run "Zoptimize.sh..."
+bash "$HOME/scripts/Zoptimize.sh" >> "$LOG" 2>&1
 ok "Optimasi selesai."
+run "Zmemory.sh..."
+bash "$HOME/scripts/Zmemory.sh" >> "$LOG" 2>&1
+ok "Memory tuning selesai."
+run "Zdeep.sh..."
+bash "$HOME/scripts/Zdeep.sh" >> "$LOG" 2>&1
+ok "Deep optimize selesai."
 
-# ── [6/7] Wintercode Agent ────────────
-echo -e "\n  ${W}[6/7] Wintercode Agent${R}"
+# Start watchdog daemon
+run "Start Zwatchdog.sh..."
+pkill -f Zwatchdog.sh 2>/dev/null
+sleep 1
+nohup bash "$HOME/scripts/Zwatchdog.sh" >> "$HOME/Zwatchdog.log" 2>&1 &
+ok "Watchdog started PID=$!"
 
-# Wake-lock — cegah Android suspend Termux
+# ── [6/8] Wintercode Agent ────────────
+echo -e "\n  ${W}[6/8] Wintercode Agent${R}"
+
 termux-wake-lock 2>/dev/null || true
 ok "Wake-lock aktif."
 
-# Lua detection (multi-version, sesuai developer agent)
 find_lua() {
   for cmd in lua5.4 lua54 lua5.3 lua53 lua; do
     local p
@@ -183,7 +200,6 @@ eval "$(luarocks path 2>/dev/null)" || true
 LUA_BIN=$(find_lua) || { err "Lua tidak ditemukan."; exit 1; }
 ok "Lua: $LUA_BIN ($(${LUA_BIN} -v 2>&1 | head -1))"
 
-# Download agent dengan validasi ukuran (min 300000 bytes)
 run "Download agent.lua..."
 curl -sL --max-time 30 --connect-timeout 10 -o "$AGENT_PATH.tmp" "$AGENT_URL" 2>> "$LOG"
 if [ -s "$AGENT_PATH.tmp" ] && [ "$(wc -c < "$AGENT_PATH.tmp" | tr -d ' ')" -ge 300000 ]; then
@@ -195,20 +211,17 @@ else
   err "Download gagal, pakai agent.lua yang sudah ada."
 fi
 
-# Inject key
 run "Inject script key..."
 mkdir -p "$WINTERHUB_DIR"
 printf '%s' "$SCRIPT_KEY" > "$WINTERHUB_DIR/script_key"
 export SCRIPT_KEY
 ok "Key tersimpan di ~/.winterhub/script_key"
 
-# Launch agent — agent mengelola PID, cgroup, dan watchdog sendiri
 run "Launch agent..."
 rm -f "$WINTERHUB_DIR/main.pid" 2>/dev/null
 cd "$(dirname "$AGENT_PATH")"
 "$LUA_BIN" "$AGENT_PATH" > /dev/null 2>&1 &
 
-# Tunggu agent tulis PID file (max 30s)
 PWAIT=0
 while [ ! -s "$WINTERHUB_DIR/main.pid" ] && [ $PWAIT -lt 15 ]; do
   sleep 2; PWAIT=$((PWAIT+1))
@@ -221,32 +234,42 @@ else
 fi
 [ -d "$WINTERHUB_DIR" ] && ok "Agent config OK." || err "Config belum ada."
 
-# ── [7/7] Boot Guard ─────────────────
-echo -e "\n  ${W}[7/7] Boot Guard${R}"
+# ── [7/8] Boot Guard ─────────────────
+echo -e "\n  ${W}[7/8] Boot Guard${R}"
 
-# Install winterhub_agent.sh sebagai boot script (dari developer)
-run "Install boot script..."
+run "Install winterhub_agent.sh..."
 curl -fsSL --retry 3 "$BASE_URL/winterhub_agent.sh" -o "$HOME/.termux/boot/winterhub_agent.sh" 2>> "$LOG"
 if [ -s "$HOME/.termux/boot/winterhub_agent.sh" ]; then
-  # Inject SCRIPT_KEY ke boot script
   sed -i "s/^SCRIPT_KEY=\"\"/SCRIPT_KEY=\"$SCRIPT_KEY\"/" "$HOME/.termux/boot/winterhub_agent.sh"
   chmod +x "$HOME/.termux/boot/winterhub_agent.sh"
   ok "winterhub_agent.sh terpasang di ~/.termux/boot/"
 else
   err "Gagal download boot script."
 fi
+ok "Zboot.sh sudah terpasang di ~/.termux/boot/ (dari step 4)"
 
+# ── [8/8] Cleanup old scripts ────────
+echo -e "\n  ${W}[8/8] Cleanup${R}"
+# Remove old dangerous scripts that use pm disable-user
+for old in debloat_rf.sh optimize_rf.sh; do
+  if [ -f "$HOME/scripts/$old" ]; then
+    rm -f "$HOME/scripts/$old"
+    ok "Removed old $old (used pm disable-user, unsafe)"
+  fi
+done
 
 # ── Done ──────────────────────────────
 FREE_MB=$(( $(grep MemAvailable /proc/meminfo | awk '{print $2}') / 1024 ))
 TOTAL_MB=$(( $(grep MemTotal    /proc/meminfo | awk '{print $2}') / 1024 ))
 
-echo -e "\n${G}  ✓ INSTALL SELESAI${R}"
+echo -e "\n${G}  INSTALL SELESAI${R}"
 echo "  ─────────────────────────────"
 echo -e "  RAM   : ${W}${FREE_MB}MB${R} / ${TOTAL_MB}MB"
 echo -e "  Agent : ${G}Wintercode${R}"
-echo -e "  Boot  : ${G}winterhub_agent.sh${R}"
+echo -e "  Boot  : ${G}winterhub_agent.sh + Zboot.sh${R}"
+echo -e "  Optim : ${G}Zdebloat + Zoptimize + Zmemory + Zdeep${R}"
+echo -e "  Daemon: ${G}Zwatchdog (60s cycle)${R}"
 echo "  ─────────────────────────────"
 echo "  Restart Redfinger untuk"
-echo "  aktifkan boot agent."
+echo "  aktifkan boot chain."
 echo -e "  Log: ~/install.log\n"

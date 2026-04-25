@@ -169,7 +169,7 @@ echo "[+] Blok 10: Storage/Misc" >> "$LOG"
 # ── BLOK 11: SCANNING & LOCATION OFF ─────────────────────────
 su -c "settings put global wifi_scan_always_enabled 0" 2>/dev/null
 su -c "settings put global ble_scan_always_enabled 0" 2>/dev/null
-dis "com.android.location.fused"
+fstop "com.android.location.fused"
 su -c "settings put secure location_mode 0" 2>/dev/null
 echo "[+] Blok 11: Scanning/Location OFF" >> "$LOG"
 
