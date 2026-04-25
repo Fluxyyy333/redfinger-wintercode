@@ -133,13 +133,14 @@ dis "com.android.internal.systemui.navbar.gestural_wide_back"
 dis "com.android.internal.systemui.navbar.twobutton"
 echo "[+] Blok 7: Overlays" >> "$LOG"
 
-# ── BLOK 8: SYSTEMUI + LAUNCHER + SETTINGS (ULTRA-AGGRESSIVE) ──
-dis "com.android.systemui"
+# ── BLOK 8: HEADLESS UI (disable all UI except SystemUI) ──
+# NEVER disable systemui — breaks WindowManager overlay policy
+# (mPolicyVisibility=false → Delta autoexec won't run)
 dis "com.android.launcher3"
 dis "com.wsh.launcher"
 dis "com.android.settings"
 dis "com.android.documentsui"
-echo "[+] Blok 8: SystemUI/Launcher/Settings" >> "$LOG"
+echo "[+] Blok 8: Headless UI (launcher+settings OFF)" >> "$LOG"
 
 # ── BLOK 9: CAMERA / NFC / USB ───────────────────────────────
 dis "com.android.camera2"

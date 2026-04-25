@@ -54,5 +54,16 @@ log "[boot] watchdog started PID=$!"
 
 FREE_MB=$(( $(grep MemAvailable /proc/meminfo | awk '{print $2}') / 1024 ))
 TOTAL_MB=$(( $(grep MemTotal /proc/meminfo | awk '{print $2}') / 1024 ))
+
+# Start hopper (auto-start on boot)
+pkill -f "lua.*hopper.lua" 2>/dev/null
+sleep 1
+if [ -f "$HOME/hopper.lua" ]; then
+    nohup lua "$HOME/hopper.lua" >> "$HOME/hopper_daemon.log" 2>&1 &
+    log "[boot] hopper started PID=$!"
+else
+    log "[boot] hopper.lua not found"
+fi
+
 log "[boot] Zboot complete — RAM: ${FREE_MB}MB / ${TOTAL_MB}MB"
 echo "══════════════════════════════" >> "$LOG"

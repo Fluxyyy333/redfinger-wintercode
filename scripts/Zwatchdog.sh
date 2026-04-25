@@ -25,7 +25,6 @@ BLOAT_KILL_LIST=(
     "com.android.chrome"
     "com.baidu.cloud.service"
     "com.wshl.file.observerservice"
-    "com.android.systemui"
     "com.android.launcher3"
     "com.wsh.launcher"
     "com.android.settings"
@@ -34,7 +33,6 @@ BLOAT_KILL_LIST=(
 )
 
 PERSISTENT_KILL=(
-    "com.android.systemui"
     "com.android.plugin"
     "com.android.se"
     "com.android.datatransport"
@@ -59,8 +57,8 @@ while true; do
     done
 
     # ── Re-enforce AM constants (reset on some events) ────────
-    su -c "settings put global activity_manager_constants max_cached_processes=2,background_settle_time=5000,fgs_bg_restriction_enabled=true" 2>/dev/null
-    su -c "settings put global always_finish_activities 1" 2>/dev/null
+    su -c "settings put global activity_manager_constants max_cached_processes=4,background_settle_time=5000,fgs_bg_restriction_enabled=true" 2>/dev/null
+    su -c "settings put global always_finish_activities 0" 2>/dev/null
 
     # ── Drop filesystem caches ────────────────────────────────
     su -c "echo 3 > /proc/sys/vm/drop_caches" 2>/dev/null
