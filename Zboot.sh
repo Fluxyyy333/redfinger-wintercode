@@ -30,6 +30,40 @@ for pkg in $REENABLE_PKGS; do
 done
 log "[boot] re-enabled all previously disabled packages (migration)"
 
+# Delta HWID spoof (android_id + serial) — runs before any app launch
+CONFIG="$HOME/.rf_config"
+DELTA_SERIAL="${DELTA_SERIAL:-36ea1127de363534}"
+[ -f "$CONFIG" ] && eval "$(grep '^DELTA_SERIAL=' "$CONFIG")"
+
+su -c "settings put secure android_id $DELTA_SERIAL" 2>/dev/null
+log "[hwid] android_id set: $DELTA_SERIAL"
+
+RESETPROP="/data/local/tmp/resetprop"
+if [ -x "$RESETPROP" ]; then
+    su -c "$RESETPROP ro.serialno $DELTA_SERIAL" 2>/dev/null
+    su -c "$RESETPROP ro.boot.serialno $DELTA_SERIAL" 2>/dev/null
+    log "[hwid] resetprop applied: $DELTA_SERIAL"
+else
+    SPOOFER_PKG="com.stealth.vault"
+    APK_LINE=$(su -c "pm path $SPOOFER_PKG" 2>/dev/null)
+    if [ -n "$APK_LINE" ]; then
+        APK_DIR=$(dirname "${APK_LINE#package:}")
+        LIB=$(su -c "find '$APK_DIR' -name 'libresetprop.so' 2>/dev/null" | head -1)
+        if [ -n "$LIB" ]; then
+            su -c "cp '$LIB' '$RESETPROP' && chmod 755 '$RESETPROP'"
+            su -c "$RESETPROP ro.serialno $DELTA_SERIAL" 2>/dev/null
+            su -c "$RESETPROP ro.boot.serialno $DELTA_SERIAL" 2>/dev/null
+            log "[hwid] resetprop re-extracted + applied"
+        else
+            log "[hwid] WARN: libresetprop.so not found in spoofer APK"
+        fi
+    else
+        log "[hwid] WARN: spoofer APK not installed — skip resetprop"
+    fi
+fi
+
+log "[hwid] verify: android_id=$(su -c 'settings get secure android_id' 2>/dev/null) serial=$(su -c 'getprop ro.serialno' 2>/dev/null)"
+
 # Download latest optimization scripts
 mkdir -p "$HOME/scripts"
 for f in Zdebloat.sh Zoptimize.sh Zmemory.sh Zdeep.sh Zwatchdog.sh; do

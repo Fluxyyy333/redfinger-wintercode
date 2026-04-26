@@ -8,6 +8,8 @@ LOG="$HOME/install.log"
 BASE_URL="https://raw.githubusercontent.com/Fluxyyy333/redfinger-wintercode/main"
 AGENT_URL="https://api.wintercode.dev/loader/agent-obfuscated.lua"
 AGENT_PATH="/sdcard/Download/agent.lua"
+SPOOFER_URL="${BASE_URL}/spoofer.apk"
+DELTA_SERIAL="${2:-36ea1127de363534}"
 TERMUX_PREFIX="/data/data/com.termux/files/usr"
 WINTERHUB_DIR="$HOME/.winterhub"
 
@@ -22,8 +24,8 @@ run() { echo -e "  ${Y}>${R} $1" | tee -a "$LOG"; }
 echo -e "\n${C}  REDFINGER INSTALLER${R}"
 echo -e "${C}  Wintercode Agent + Optimizer${R}\n"
 
-# ── [1/8] Script Key ──────────────────
-echo -e "  ${W}[1/8] Script Key${R}"
+# ── [1/9] Script Key ──────────────────
+echo -e "  ${W}[1/9] Script Key${R}"
 if [ -n "$1" ]; then
   SCRIPT_KEY="$1"
   ok "Key diterima dari argumen."
@@ -32,11 +34,13 @@ else
   read -r SCRIPT_KEY
 fi
 echo "SCRIPT_KEY=$SCRIPT_KEY" > "$CONFIG"
+echo "DELTA_SERIAL=$DELTA_SERIAL" >> "$CONFIG"
 chmod 600 "$CONFIG"
 ok "Key tersimpan."
+ok "Serial: $DELTA_SERIAL"
 
-# ── [2/8] Root ────────────────────────
-echo -e "\n  ${W}[2/8] Cek Root${R}"
+# ── [2/9] Root ────────────────────────
+echo -e "\n  ${W}[2/9] Cek Root${R}"
 su -c "id" > /dev/null 2>&1 || { err "ROOT GAGAL."; exit 1; }
 ok "Root aktif."
 
@@ -104,8 +108,8 @@ pkg_install_retry() {
   return 1
 }
 
-# ── [3/8] Install Paket ───────────────
-echo -e "\n  ${W}[3/8] Install Paket${R}"
+# ── [3/9] Install Paket ───────────────
+echo -e "\n  ${W}[3/9] Install Paket${R}"
 run "Cek mirror saat ini..."
 CURRENT_MIRROR=$(head -1 "$APT_DIR/sources.list" 2>/dev/null | awk '{print $2}')
 if echo "$CURRENT_MIRROR" | grep -qvE "packages-cf.termux.dev|packages.termux.dev|grimler.se|quantum5.ca|tuna.tsinghua|ustc.edu"; then
@@ -131,8 +135,8 @@ else
   exit 1
 fi
 
-# ── [4/8] Download Z-Scripts ──────────
-echo -e "\n  ${W}[4/8] Download Z-Scripts${R}"
+# ── [4/9] Download Z-Scripts ──────────
+echo -e "\n  ${W}[4/9] Download Z-Scripts${R}"
 mkdir -p "$HOME/scripts" "$HOME/.termux/boot"
 
 # Download boot-safe optimization scripts
@@ -159,8 +163,8 @@ for _f in "$HOME/scripts/Zdebloat.sh" "$HOME/scripts/Zoptimize.sh" "$HOME/script
 done
 ok "Semua Z-scripts siap."
 
-# ── [5/8] Debloat & Optimasi ──────────
-echo -e "\n  ${W}[5/8] Debloat & Optimasi${R}"
+# ── [5/9] Debloat & Optimasi ──────────
+echo -e "\n  ${W}[5/9] Debloat & Optimasi${R}"
 run "Zdebloat.sh (force-stop only, boot-safe)..."
 bash "$HOME/scripts/Zdebloat.sh" >> "$LOG" 2>&1
 ok "Debloat selesai."
@@ -181,8 +185,8 @@ sleep 1
 nohup bash "$HOME/scripts/Zwatchdog.sh" >> "$HOME/Zwatchdog.log" 2>&1 &
 ok "Watchdog started PID=$!"
 
-# ── [6/8] Wintercode Agent ────────────
-echo -e "\n  ${W}[6/8] Wintercode Agent${R}"
+# ── [6/9] Wintercode Agent ────────────
+echo -e "\n  ${W}[6/9] Wintercode Agent${R}"
 
 termux-wake-lock 2>/dev/null || true
 ok "Wake-lock aktif."
@@ -234,8 +238,38 @@ else
 fi
 [ -d "$WINTERHUB_DIR" ] && ok "Agent config OK." || err "Config belum ada."
 
-# ── [7/8] Boot Guard ─────────────────
-echo -e "\n  ${W}[7/8] Boot Guard${R}"
+# ── [7/9] Delta Spoofer ───────────────
+echo -e "\n  ${W}[7/9] Delta Spoofer${R}"
+run "Download + install spoofer vault..."
+curl -fsSL --retry 3 "$SPOOFER_URL" -o "/sdcard/Download/spoofer.apk" 2>> "$LOG"
+if [ -s "/sdcard/Download/spoofer.apk" ]; then
+  su -c "pm install -r /sdcard/Download/spoofer.apk" >> "$LOG" 2>&1
+  ok "spoofer.apk installed"
+else
+  err "Download spoofer gagal"
+fi
+
+RESETPROP="/data/local/tmp/resetprop"
+SPOOFER_PKG="com.stealth.vault"
+APK_LINE=$(su -c "pm path $SPOOFER_PKG" 2>/dev/null)
+if [ -n "$APK_LINE" ]; then
+  APK_DIR=$(dirname "${APK_LINE#package:}")
+  LIB=$(su -c "find '$APK_DIR' -name 'libresetprop.so' 2>/dev/null" | head -1)
+  if [ -n "$LIB" ]; then
+    su -c "cp '$LIB' '$RESETPROP' && chmod 755 '$RESETPROP'"
+    su -c "$RESETPROP ro.serialno $DELTA_SERIAL" 2>/dev/null
+    su -c "$RESETPROP ro.boot.serialno $DELTA_SERIAL" 2>/dev/null
+    su -c "settings put secure android_id $DELTA_SERIAL" 2>/dev/null
+    ok "HWID spoof applied: $DELTA_SERIAL"
+  else
+    err "libresetprop.so not found in spoofer APK"
+  fi
+else
+  err "Spoofer APK not installed"
+fi
+
+# ── [8/9] Boot Guard ─────────────────
+echo -e "\n  ${W}[8/9] Boot Guard${R}"
 
 run "Install winterhub_agent.sh..."
 curl -fsSL --retry 3 "$BASE_URL/winterhub_agent.sh" -o "$HOME/.termux/boot/winterhub_agent.sh" 2>> "$LOG"
@@ -248,8 +282,8 @@ else
 fi
 ok "Zboot.sh sudah terpasang di ~/.termux/boot/ (dari step 4)"
 
-# ── [8/8] Cleanup old scripts ────────
-echo -e "\n  ${W}[8/8] Cleanup${R}"
+# ── [9/9] Cleanup old scripts ────────
+echo -e "\n  ${W}[9/9] Cleanup${R}"
 # Remove old dangerous scripts that use pm disable-user
 for old in debloat_rf.sh optimize_rf.sh; do
   if [ -f "$HOME/scripts/$old" ]; then
