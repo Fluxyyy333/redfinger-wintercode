@@ -45,50 +45,46 @@ fi
 
 # Delta HWID spoof (android_id + serial) — runs before any app launch
 # Safe config parsing — NO eval, grep + cut only
-DELTA_SERIAL=""
+DELTA_SERIAL="36ea1127de363534"
 if [ -f "$CONFIG" ]; then
-    DELTA_SERIAL=$(grep '^DELTA_SERIAL=' "$CONFIG" | head -1 | cut -d'=' -f2 | tr -d '[:space:]')
+    CFG_SERIAL=$(grep '^DELTA_SERIAL=' "$CONFIG" | head -1 | cut -d'=' -f2 | tr -d '[:space:]')
+    [ -n "$CFG_SERIAL" ] && DELTA_SERIAL="$CFG_SERIAL"
 fi
 
-if [ -z "$DELTA_SERIAL" ]; then
-    log "[hwid] FATAL: no DELTA_SERIAL in $CONFIG — REFUSING to boot with wrong HWID"
-    log "[hwid] Run install.sh with correct serial first. Skipping Roblox launch."
+su -c "settings put secure android_id $DELTA_SERIAL" 2>/dev/null
+log "[hwid] android_id set: $DELTA_SERIAL"
+
+RESETPROP="/data/local/tmp/resetprop"
+if [ -x "$RESETPROP" ]; then
+    su -c "$RESETPROP ro.serialno $DELTA_SERIAL" 2>/dev/null
+    su -c "$RESETPROP ro.boot.serialno $DELTA_SERIAL" 2>/dev/null
+    log "[hwid] resetprop applied: $DELTA_SERIAL"
 else
-    su -c "settings put secure android_id $DELTA_SERIAL" 2>/dev/null
-    log "[hwid] android_id set: $DELTA_SERIAL"
-
-    RESETPROP="/data/local/tmp/resetprop"
-    if [ -x "$RESETPROP" ]; then
-        su -c "$RESETPROP ro.serialno $DELTA_SERIAL" 2>/dev/null
-        su -c "$RESETPROP ro.boot.serialno $DELTA_SERIAL" 2>/dev/null
-        log "[hwid] resetprop applied: $DELTA_SERIAL"
-    else
-        SPOOFER_PKG="com.stealth.vault"
-        APK_LINE=$(su -c "pm path $SPOOFER_PKG" 2>/dev/null)
-        if [ -n "$APK_LINE" ]; then
-            APK_DIR=$(dirname "${APK_LINE#package:}")
-            LIB=$(su -c "find \"$APK_DIR\" -name 'libresetprop.so' 2>/dev/null" | head -1)
-            if [ -n "$LIB" ]; then
-                su -c "cp \"$LIB\" \"$RESETPROP\" && chmod 755 \"$RESETPROP\""
-                su -c "$RESETPROP ro.serialno $DELTA_SERIAL" 2>/dev/null
-                su -c "$RESETPROP ro.boot.serialno $DELTA_SERIAL" 2>/dev/null
-                log "[hwid] resetprop re-extracted + applied"
-            else
-                log "[hwid] WARN: libresetprop.so not found in spoofer APK"
-            fi
+    SPOOFER_PKG="com.stealth.vault"
+    APK_LINE=$(su -c "pm path $SPOOFER_PKG" 2>/dev/null)
+    if [ -n "$APK_LINE" ]; then
+        APK_DIR=$(dirname "${APK_LINE#package:}")
+        LIB=$(su -c "find \"$APK_DIR\" -name 'libresetprop.so' 2>/dev/null" | head -1)
+        if [ -n "$LIB" ]; then
+            su -c "cp \"$LIB\" \"$RESETPROP\" && chmod 755 \"$RESETPROP\""
+            su -c "$RESETPROP ro.serialno $DELTA_SERIAL" 2>/dev/null
+            su -c "$RESETPROP ro.boot.serialno $DELTA_SERIAL" 2>/dev/null
+            log "[hwid] resetprop re-extracted + applied"
         else
-            log "[hwid] WARN: spoofer APK not installed — skip resetprop"
+            log "[hwid] WARN: libresetprop.so not found in spoofer APK"
         fi
-    fi
-
-    # Verify HWID values match intended target
-    ACTUAL_AID=$(su -c 'settings get secure android_id' 2>/dev/null)
-    ACTUAL_SER=$(su -c 'getprop ro.serialno' 2>/dev/null)
-    if [ "$ACTUAL_AID" = "$DELTA_SERIAL" ] && [ "$ACTUAL_SER" = "$DELTA_SERIAL" ]; then
-        log "[hwid] VERIFIED OK: android_id=$ACTUAL_AID serial=$ACTUAL_SER"
     else
-        log "[hwid] MISMATCH! expected=$DELTA_SERIAL got aid=$ACTUAL_AID ser=$ACTUAL_SER"
+        log "[hwid] WARN: spoofer APK not installed — skip resetprop"
     fi
+fi
+
+# Verify HWID values match intended target
+ACTUAL_AID=$(su -c 'settings get secure android_id' 2>/dev/null)
+ACTUAL_SER=$(su -c 'getprop ro.serialno' 2>/dev/null)
+if [ "$ACTUAL_AID" = "$DELTA_SERIAL" ] && [ "$ACTUAL_SER" = "$DELTA_SERIAL" ]; then
+    log "[hwid] VERIFIED OK: android_id=$ACTUAL_AID serial=$ACTUAL_SER"
+else
+    log "[hwid] MISMATCH! expected=$DELTA_SERIAL got aid=$ACTUAL_AID ser=$ACTUAL_SER"
 fi
 
 # Staggered download: random 0-30s delay to avoid GitHub rate limit on 300+ devices

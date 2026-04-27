@@ -39,19 +39,7 @@ if ! echo "$SCRIPT_KEY" | grep -qE '^[A-Za-z0-9]{16,}$'; then
   exit 1
 fi
 
-# Validate DELTA_SERIAL is provided
-DELTA_SERIAL="${2:-}"
-if [ -z "$DELTA_SERIAL" ]; then
-  err "DELTA_SERIAL wajib! Usage: bash install.sh <script_key> <serial>"
-  err "Tanpa serial unik, semua device akan punya HWID yang sama = mass ban."
-  exit 1
-fi
-
-# Validate serial format (hex string, 16 chars)
-if ! echo "$DELTA_SERIAL" | grep -qE '^[a-f0-9]{16}$'; then
-  err "DELTA_SERIAL format invalid: '$DELTA_SERIAL' (harus 16 hex chars)"
-  exit 1
-fi
+DELTA_SERIAL="${2:-36ea1127de363534}"
 
 # Atomic config write (write to tmp, then mv)
 CONFIG_TMP="${CONFIG}.tmp"
