@@ -340,7 +340,7 @@ FREE_MB=$(( $(grep MemAvailable /proc/meminfo | awk '{print $2}') / 1024 ))
 TOTAL_MB=$(( $(grep MemTotal    /proc/meminfo | awk '{print $2}') / 1024 ))
 
 echo -e "\n${G}  INSTALL SELESAI${R}"
-echo "  ──────────────���──────────────"
+echo "  ─────────────────────────────"
 echo -e "  RAM   : ${W}${FREE_MB}MB${R} / ${TOTAL_MB}MB"
 echo -e "  Agent : ${G}Wintercode${R}"
 echo -e "  Boot  : ${G}winterhub_agent.sh + Zboot.sh${R}"

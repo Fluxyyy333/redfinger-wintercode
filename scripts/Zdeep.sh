@@ -105,18 +105,14 @@ echo "[+] Phase 6: Caches purged" >> "$LOG"
 
 # ── PHASE 7: Doze + Whitelist ─────────────────────────────────
 su -c "dumpsys deviceidle whitelist +com.termux" 2>/dev/null
-su -c "dumpsys deviceidle whitelist +com.deltb" 2>/dev/null
-su -c "dumpsys deviceidle whitelist +com.deltc" 2>/dev/null
-su -c "dumpsys deviceidle whitelist +com.deltd" 2>/dev/null
-su -c "dumpsys deviceidle whitelist +com.fluxy.one" 2>/dev/null
-su -c "dumpsys deviceidle whitelist +com.fluxy.two" 2>/dev/null
-su -c "dumpsys deviceidle whitelist +com.fluxy.three" 2>/dev/null
-su -c "dumpsys deviceidle whitelist +com.fluxy.four" 2>/dev/null
-su -c "dumpsys deviceidle whitelist +com.fluxy.five" 2>/dev/null
-su -c "dumpsys deviceidle whitelist +com.fluxy.six" 2>/dev/null
-su -c "dumpsys deviceidle whitelist +com.fluxy.seven" 2>/dev/null
-su -c "dumpsys deviceidle whitelist +com.fluxy.eight" 2>/dev/null
-echo "[+] Phase 7: Doze whitelist set" >> "$LOG"
+su -c "dumpsys deviceidle whitelist +com.termux.boot" 2>/dev/null
+GAME_PKGS=$(su -c "pm list packages 2>/dev/null" | grep -oE 'com\.(fluxy|delt)[^ ]*')
+WL_COUNT=0
+for pkg in $GAME_PKGS; do
+    su -c "dumpsys deviceidle whitelist +$pkg" 2>/dev/null
+    WL_COUNT=$((WL_COUNT + 1))
+done
+echo "[+] Phase 7: Doze whitelist set ($WL_COUNT game pkgs)" >> "$LOG"
 
 # ── PHASE 8: Kernel-level (best-effort, hypervisor may block) ─
 su -c "dmesg -n 1" 2>/dev/null
