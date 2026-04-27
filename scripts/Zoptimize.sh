@@ -38,11 +38,12 @@ su -c "setprop debug.hwui.overdraw false" 2>/dev/null
 su -c "settings put global force_4x_msaa 0" 2>/dev/null
 su -c "settings put global enable_gpu_debug_layers 0" 2>/dev/null
 su -c "settings put global disable_overlays 0" 2>/dev/null
-# Delta + all clone packages need overlay permission
-for pkg in com.deltb com.deltc com.deltd $(su -c "pm list packages 2>/dev/null" | grep -oE 'com\.fluxy\.[a-z]+'); do
+# Delta + all clone packages need overlay permission (dynamic discovery)
+CLONE_PKGS=$(su -c "pm list packages 2>/dev/null" | grep -oE 'com\.delt[a-z]+')
+for pkg in $CLONE_PKGS; do
     su -c "appops set $pkg SYSTEM_ALERT_WINDOW allow" 2>/dev/null
 done
-echo "[+] 3/7 GPU tuning (overlays kept for Delta + clones)" >> "$LOG"
+echo "[+] 3/7 GPU tuning (overlays for $(echo "$CLONE_PKGS" | wc -w) clone pkgs)" >> "$LOG"
 
 # ── [4/7] Doze Mode ────────────────────────────────────────────
 su -c "dumpsys deviceidle disable" >> "$LOG" 2>&1
