@@ -25,8 +25,10 @@ SELF_NAME="$(basename "$SELF")"
 if [ "$SELF_NAME" != "$EXPECTED_NAME" ] && [ -f "$SELF" ]; then
     cp "$SELF" "$BOOT_DIR/$EXPECTED_NAME"
     chmod +x "$BOOT_DIR/$EXPECTED_NAME"
-    rm -f "$SELF"
-    exec "$BOOT_DIR/$EXPECTED_NAME" "$@"
+    if [ -x "$BOOT_DIR/$EXPECTED_NAME" ]; then
+        rm -f "$SELF"
+        exec "$BOOT_DIR/$EXPECTED_NAME" "$@"
+    fi
 fi
 
 export DEBIAN_FRONTEND=noninteractive
@@ -61,11 +63,13 @@ while ! su -c "id" >/dev/null 2>&1; do sleep 2; done
 log "[+] Root ready"
 
 TRIES=0
-while ! ping -c 1 -W 2 8.8.8.8 > /dev/null 2>&1 && [ $TRIES -lt 30 ]; do
+while [ $TRIES -lt 30 ]; do
+    ping -c 1 -W 2 8.8.8.8 > /dev/null 2>&1 && break
+    curl -s --max-time 3 --head https://api.wintercode.dev > /dev/null 2>&1 && break
     sleep 2
     TRIES=$((TRIES+1))
 done
-log "[+] Network ready"
+log "[+] Network ready (tries=$TRIES)"
 
 termux-wake-lock 2>/dev/null || true
 

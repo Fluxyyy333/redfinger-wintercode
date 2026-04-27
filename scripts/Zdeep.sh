@@ -98,7 +98,8 @@ echo "[+] Phase 5: Memory trimmed" >> "$LOG"
 su -c "rm -rf /data/data/com.google.android.gms/cache/* /data/data/com.google.android.gms/code_cache/*" 2>/dev/null
 su -c "rm -rf /data/data/com.android.systemui/cache/* /data/data/com.android.phone/cache/*" 2>/dev/null
 su -c "rm -rf /data/tombstones/* /data/anr/*" 2>/dev/null
-su -c "pm trim-caches 999G" 2>/dev/null
+# trim 500M instead of 999G to preserve Roblox asset caches
+su -c "pm trim-caches 500M" 2>/dev/null
 su -c "echo 3 > /proc/sys/vm/drop_caches" 2>/dev/null
 echo "[+] Phase 6: Caches purged" >> "$LOG"
 
@@ -120,7 +121,6 @@ echo "[+] Phase 7: Doze whitelist set" >> "$LOG"
 # ── PHASE 8: Kernel-level (best-effort, hypervisor may block) ─
 su -c "dmesg -n 1" 2>/dev/null
 su -c "echo 1 > /proc/sys/vm/compact_memory" 2>/dev/null
-su -c "echo 1 > /proc/sys/vm/overcommit_memory" 2>/dev/null
 echo "[+] Phase 8: Kernel tuning attempted" >> "$LOG"
 
 # ── RESULT ────────────────────────────────────────────────────

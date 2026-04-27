@@ -208,7 +208,7 @@ for pkg in \
   "com.android.email" "com.android.calendar" \
   "com.baidu.cloud.service" "com.wsh.appstore" \
   "com.google.android.apps.nbu.files" "com.google.android.tts"; do
-  su -c "pm clear $pkg >> $LOG 2>&1"
+  su -c "pm clear $pkg" >> "$LOG" 2>&1
 done
 echo "[+] Blok 15: Cache cleared" >> "$LOG"
 

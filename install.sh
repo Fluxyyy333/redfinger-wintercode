@@ -9,7 +9,6 @@ BASE_URL="https://raw.githubusercontent.com/Fluxyyy333/redfinger-wintercode/main
 AGENT_URL="https://api.wintercode.dev/loader/agent-obfuscated.lua"
 AGENT_PATH="/sdcard/Download/agent.lua"
 SPOOFER_URL="${BASE_URL}/spoofer.apk"
-DELTA_SERIAL="${2:-36ea1127de363534}"
 TERMUX_PREFIX="/data/data/com.termux/files/usr"
 WINTERHUB_DIR="$HOME/.winterhub"
 
@@ -33,10 +32,36 @@ else
   echo -ne "  ${Y}Masukkan script key (32 hex):${R} "
   read -r SCRIPT_KEY
 fi
-echo "SCRIPT_KEY=$SCRIPT_KEY" > "$CONFIG"
-echo "DELTA_SERIAL=$DELTA_SERIAL" >> "$CONFIG"
+
+# Validate script key format
+if ! echo "$SCRIPT_KEY" | grep -qE '^[A-Za-z0-9]{16,}$'; then
+  err "Script key format invalid (harus minimal 16 karakter alfanumerik)."
+  exit 1
+fi
+
+# Validate DELTA_SERIAL is provided
+DELTA_SERIAL="${2:-}"
+if [ -z "$DELTA_SERIAL" ]; then
+  err "DELTA_SERIAL wajib! Usage: bash install.sh <script_key> <serial>"
+  err "Tanpa serial unik, semua device akan punya HWID yang sama = mass ban."
+  exit 1
+fi
+
+# Validate serial format (hex string, 16 chars)
+if ! echo "$DELTA_SERIAL" | grep -qE '^[a-f0-9]{16}$'; then
+  err "DELTA_SERIAL format invalid: '$DELTA_SERIAL' (harus 16 hex chars)"
+  exit 1
+fi
+
+# Atomic config write (write to tmp, then mv)
+CONFIG_TMP="${CONFIG}.tmp"
+{
+  echo "SCRIPT_KEY=$SCRIPT_KEY"
+  echo "DELTA_SERIAL=$DELTA_SERIAL"
+} > "$CONFIG_TMP"
+mv "$CONFIG_TMP" "$CONFIG"
 chmod 600 "$CONFIG"
-ok "Key tersimpan."
+ok "Config tersimpan (atomic write)."
 ok "Serial: $DELTA_SERIAL"
 
 # ── [2/9] Root ────────────────────────
@@ -128,6 +153,11 @@ pkg_install_retry lua53
 run "pkg install tsu..."
 pkg_install_retry tsu
 
+# Install cronie for crontab (boot fallback + watchdog self-heal)
+run "pkg install cronie..."
+pkg_install_retry cronie
+crond 2>/dev/null
+
 if command -v lua > /dev/null 2>&1; then
   ok "lua OK: $(lua -v 2>&1 | head -1)"
 else
@@ -142,18 +172,26 @@ mkdir -p "$HOME/scripts" "$HOME/.termux/boot"
 # Download boot-safe optimization scripts
 for f in Zdebloat.sh Zoptimize.sh Zmemory.sh Zdeep.sh Zwatchdog.sh; do
   run "Download scripts/$f..."
-  curl -fsSL --retry 3 "$BASE_URL/scripts/$f" -o "$HOME/scripts/$f" 2>> "$LOG"
-  [ -s "$HOME/scripts/$f" ] && ok "$f" || err "GAGAL: $f"
+  curl -fsSL --retry 3 "$BASE_URL/scripts/$f" -o "$HOME/scripts/$f.tmp" 2>> "$LOG"
+  if [ -s "$HOME/scripts/$f.tmp" ] && head -1 "$HOME/scripts/$f.tmp" | grep -q '^#!'; then
+    mv "$HOME/scripts/$f.tmp" "$HOME/scripts/$f"
+    ok "$f"
+  else
+    rm -f "$HOME/scripts/$f.tmp"
+    err "GAGAL: $f (download corrupt atau kosong)"
+  fi
 done
 chmod +x "$HOME/scripts/"*.sh
 
 # Download Zboot.sh (boot chain orchestrator)
 run "Download Zboot.sh..."
-curl -fsSL --retry 3 "$BASE_URL/Zboot.sh" -o "$HOME/.termux/boot/Zboot.sh" 2>> "$LOG"
-if [ -s "$HOME/.termux/boot/Zboot.sh" ]; then
+curl -fsSL --retry 3 "$BASE_URL/Zboot.sh" -o "$HOME/.termux/boot/Zboot.sh.tmp" 2>> "$LOG"
+if [ -s "$HOME/.termux/boot/Zboot.sh.tmp" ] && head -1 "$HOME/.termux/boot/Zboot.sh.tmp" | grep -q '^#!'; then
+  mv "$HOME/.termux/boot/Zboot.sh.tmp" "$HOME/.termux/boot/Zboot.sh"
   chmod +x "$HOME/.termux/boot/Zboot.sh"
   ok "Zboot.sh → ~/.termux/boot/"
 else
+  rm -f "$HOME/.termux/boot/Zboot.sh.tmp"
   err "GAGAL: Zboot.sh"
 fi
 
@@ -181,8 +219,9 @@ ok "Deep optimize selesai."
 # Start watchdog daemon
 run "Start Zwatchdog.sh..."
 pkill -f Zwatchdog.sh 2>/dev/null
-sleep 1
+sleep 2
 nohup bash "$HOME/scripts/Zwatchdog.sh" >> "$HOME/Zwatchdog.log" 2>&1 &
+echo "$!" > "$HOME/.watchdog.pid"
 ok "Watchdog started PID=$!"
 
 # ── [6/9] Wintercode Agent ────────────
@@ -254,13 +293,20 @@ SPOOFER_PKG="com.stealth.vault"
 APK_LINE=$(su -c "pm path $SPOOFER_PKG" 2>/dev/null)
 if [ -n "$APK_LINE" ]; then
   APK_DIR=$(dirname "${APK_LINE#package:}")
-  LIB=$(su -c "find '$APK_DIR' -name 'libresetprop.so' 2>/dev/null" | head -1)
+  LIB=$(su -c "find \"$APK_DIR\" -name 'libresetprop.so' 2>/dev/null" | head -1)
   if [ -n "$LIB" ]; then
-    su -c "cp '$LIB' '$RESETPROP' && chmod 755 '$RESETPROP'"
+    su -c "cp \"$LIB\" \"$RESETPROP\" && chmod 755 \"$RESETPROP\""
     su -c "$RESETPROP ro.serialno $DELTA_SERIAL" 2>/dev/null
     su -c "$RESETPROP ro.boot.serialno $DELTA_SERIAL" 2>/dev/null
     su -c "settings put secure android_id $DELTA_SERIAL" 2>/dev/null
-    ok "HWID spoof applied: $DELTA_SERIAL"
+    # Verify spoof took effect
+    ACTUAL_SER=$(su -c "getprop ro.serialno" 2>/dev/null)
+    ACTUAL_AID=$(su -c "settings get secure android_id" 2>/dev/null)
+    if [ "$ACTUAL_SER" = "$DELTA_SERIAL" ] && [ "$ACTUAL_AID" = "$DELTA_SERIAL" ]; then
+      ok "HWID spoof VERIFIED: $DELTA_SERIAL"
+    else
+      err "HWID MISMATCH! expected=$DELTA_SERIAL got ser=$ACTUAL_SER aid=$ACTUAL_AID"
+    fi
   else
     err "libresetprop.so not found in spoofer APK"
   fi
@@ -272,15 +318,24 @@ fi
 echo -e "\n  ${W}[8/9] Boot Guard${R}"
 
 run "Install winterhub_agent.sh..."
-curl -fsSL --retry 3 "$BASE_URL/winterhub_agent.sh" -o "$HOME/.termux/boot/winterhub_agent.sh" 2>> "$LOG"
-if [ -s "$HOME/.termux/boot/winterhub_agent.sh" ]; then
+curl -fsSL --retry 3 "$BASE_URL/winterhub_agent.sh" -o "$HOME/.termux/boot/winterhub_agent.sh.tmp" 2>> "$LOG"
+if [ -s "$HOME/.termux/boot/winterhub_agent.sh.tmp" ] && head -1 "$HOME/.termux/boot/winterhub_agent.sh.tmp" | grep -q '^#!'; then
+  mv "$HOME/.termux/boot/winterhub_agent.sh.tmp" "$HOME/.termux/boot/winterhub_agent.sh"
   sed -i "s/^SCRIPT_KEY=\"\"/SCRIPT_KEY=\"$SCRIPT_KEY\"/" "$HOME/.termux/boot/winterhub_agent.sh"
   chmod +x "$HOME/.termux/boot/winterhub_agent.sh"
   ok "winterhub_agent.sh terpasang di ~/.termux/boot/"
 else
+  rm -f "$HOME/.termux/boot/winterhub_agent.sh.tmp"
   err "Gagal download boot script."
 fi
 ok "Zboot.sh sudah terpasang di ~/.termux/boot/ (dari step 4)"
+
+# Setup crontab: watchdog self-heal + boot fallback
+run "Setup crontab..."
+CRON_WD='* * * * * pgrep -f Zwatchdog.sh >/dev/null || nohup bash $HOME/scripts/Zwatchdog.sh >> $HOME/Zwatchdog.log 2>&1 &'
+CRON_BOOT='@reboot sleep 30 && bash $HOME/.termux/boot/Zboot.sh'
+( echo "$CRON_WD"; echo "$CRON_BOOT" ) | crontab - 2>/dev/null
+ok "Crontab installed (watchdog self-heal + boot fallback)"
 
 # ── [9/9] Cleanup old scripts ────────
 echo -e "\n  ${W}[9/9] Cleanup${R}"
@@ -297,12 +352,14 @@ FREE_MB=$(( $(grep MemAvailable /proc/meminfo | awk '{print $2}') / 1024 ))
 TOTAL_MB=$(( $(grep MemTotal    /proc/meminfo | awk '{print $2}') / 1024 ))
 
 echo -e "\n${G}  INSTALL SELESAI${R}"
-echo "  ─────────────────────────────"
+echo "  ──────────────���──────────────"
 echo -e "  RAM   : ${W}${FREE_MB}MB${R} / ${TOTAL_MB}MB"
 echo -e "  Agent : ${G}Wintercode${R}"
 echo -e "  Boot  : ${G}winterhub_agent.sh + Zboot.sh${R}"
 echo -e "  Optim : ${G}Zdebloat + Zoptimize + Zmemory + Zdeep${R}"
 echo -e "  Daemon: ${G}Zwatchdog (60s cycle)${R}"
+echo -e "  Cron  : ${G}watchdog self-heal + @reboot fallback${R}"
+echo -e "  HWID  : ${G}$DELTA_SERIAL${R}"
 echo "  ─────────────────────────────"
 echo "  Restart Redfinger untuk"
 echo "  aktifkan boot chain."

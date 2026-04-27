@@ -39,7 +39,6 @@ echo "$SWAP_INFO" >> "$LOG"
 su -c "echo 100 > /proc/sys/vm/swappiness" 2>/dev/null && echo "[+] 2/5 swappiness=100" >> "$LOG" || echo "[~] 2/5 swappiness blocked" >> "$LOG"
 su -c "echo 50 > /proc/sys/vm/vfs_cache_pressure" 2>/dev/null
 su -c "echo 0 > /proc/sys/vm/oom_dump_tasks" 2>/dev/null
-su -c "echo 1 > /proc/sys/vm/overcommit_memory" 2>/dev/null
 
 # ── [3/5] Dalvik Heap Tuning ──────────────────────────────────
 su -c "setprop dalvik.vm.heapsize 128m" 2>/dev/null
