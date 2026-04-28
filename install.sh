@@ -1,7 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # INSTALL.sh — Redfinger Optimizer + Wintercode Agent
 # Redfinger Android 10 ARM64 | Roblox Multi-Instance
-# Uses boot-safe Z-scripts (force-stop only, NO pm disable-user)
 
 CONFIG="$HOME/.rf_config"
 LOG="$HOME/install.log"
@@ -23,17 +22,16 @@ run() { echo -e "  ${Y}>${R} $1" | tee -a "$LOG"; }
 echo -e "\n${C}  REDFINGER INSTALLER${R}"
 echo -e "${C}  Wintercode Agent + Optimizer${R}\n"
 
-# ── [1/9] Script Key ──────────────────
-echo -e "  ${W}[1/9] Script Key${R}"
+# ── [1/8] Script Key ─────────────────────────────────────────
+echo -e "  ${W}[1/8] Script Key${R}"
 if [ -n "$1" ]; then
   SCRIPT_KEY="$1"
   ok "Key diterima dari argumen."
 else
-  echo -ne "  ${Y}Masukkan script key (32 hex):${R} "
+  echo -ne "  ${Y}Masukkan script key (16+ alfanumerik):${R} "
   read -r SCRIPT_KEY
 fi
 
-# Validate script key format
 if ! echo "$SCRIPT_KEY" | grep -qE '^[A-Za-z0-9]{16,}$'; then
   err "Script key format invalid (harus minimal 16 karakter alfanumerik)."
   exit 1
@@ -41,7 +39,6 @@ fi
 
 DELTA_SERIAL="${2:-36ea1127de363534}"
 
-# Atomic config write (write to tmp, then mv)
 CONFIG_TMP="${CONFIG}.tmp"
 {
   echo "SCRIPT_KEY=$SCRIPT_KEY"
@@ -49,15 +46,15 @@ CONFIG_TMP="${CONFIG}.tmp"
 } > "$CONFIG_TMP"
 mv "$CONFIG_TMP" "$CONFIG"
 chmod 600 "$CONFIG"
-ok "Config tersimpan (atomic write)."
+ok "Config tersimpan."
 ok "Serial: $DELTA_SERIAL"
 
-# ── [2/9] Root ────────────────────────
-echo -e "\n  ${W}[2/9] Cek Root${R}"
+# ── [2/8] Root ───────────────────────────────────────────────
+echo -e "\n  ${W}[2/8] Cek Root${R}"
 su -c "id" > /dev/null 2>&1 || { err "ROOT GAGAL."; exit 1; }
 ok "Root aktif."
 
-# ── Mirror helpers ────────────────────
+# ── Mirror helpers ───────────────────────────────────────────
 FALLBACK_MIRRORS=(
   "https://packages-cf.termux.dev/apt/termux-main"
   "https://packages.termux.dev/apt/termux-main"
@@ -121,8 +118,8 @@ pkg_install_retry() {
   return 1
 }
 
-# ── [3/9] Install Paket ───────────────
-echo -e "\n  ${W}[3/9] Install Paket${R}"
+# ── [3/8] Install Paket ──────────────────────────────────────
+echo -e "\n  ${W}[3/8] Install Paket${R}"
 run "Cek mirror saat ini..."
 CURRENT_MIRROR=$(head -1 "$APT_DIR/sources.list" 2>/dev/null | awk '{print $2}')
 if echo "$CURRENT_MIRROR" | grep -qvE "packages-cf.termux.dev|packages.termux.dev|grimler.se|quantum5.ca|tuna.tsinghua|ustc.edu"; then
@@ -141,7 +138,6 @@ pkg_install_retry lua53
 run "pkg install tsu..."
 pkg_install_retry tsu
 
-# Install cronie for crontab (boot fallback + watchdog self-heal)
 run "pkg install cronie..."
 pkg_install_retry cronie
 crond 2>/dev/null
@@ -153,12 +149,11 @@ else
   exit 1
 fi
 
-# ── [4/9] Download Z-Scripts ──────────
-echo -e "\n  ${W}[4/9] Download Z-Scripts${R}"
+# ── [4/8] Download Scripts ───────────────────────────────────
+echo -e "\n  ${W}[4/8] Download Scripts${R}"
 mkdir -p "$HOME/scripts" "$HOME/.termux/boot"
 
-# Download boot-safe optimization scripts
-for f in Zdebloat.sh Zoptimize.sh Zmemory.sh Zdeep.sh Zwatchdog.sh; do
+for f in Zoptimize.sh Zwatchdog.sh delta_setup.sh; do
   run "Download scripts/$f..."
   curl -fsSL --retry 3 "$BASE_URL/scripts/$f" -o "$HOME/scripts/$f.tmp" 2>> "$LOG"
   if [ -s "$HOME/scripts/$f.tmp" ] && head -1 "$HOME/scripts/$f.tmp" | grep -q '^#!'; then
@@ -171,7 +166,6 @@ for f in Zdebloat.sh Zoptimize.sh Zmemory.sh Zdeep.sh Zwatchdog.sh; do
 done
 chmod +x "$HOME/scripts/"*.sh
 
-# Download Zboot.sh (boot chain orchestrator)
 run "Download Zboot.sh..."
 curl -fsSL --retry 3 "$BASE_URL/Zboot.sh" -o "$HOME/.termux/boot/Zboot.sh.tmp" 2>> "$LOG"
 if [ -s "$HOME/.termux/boot/Zboot.sh.tmp" ] && head -1 "$HOME/.termux/boot/Zboot.sh.tmp" | grep -q '^#!'; then
@@ -183,28 +177,17 @@ else
   err "GAGAL: Zboot.sh"
 fi
 
-# Validate critical files
-for _f in "$HOME/scripts/Zdebloat.sh" "$HOME/scripts/Zoptimize.sh" "$HOME/scripts/Zmemory.sh" "$HOME/scripts/Zdeep.sh" "$HOME/scripts/Zwatchdog.sh"; do
+for _f in "$HOME/scripts/Zoptimize.sh" "$HOME/scripts/Zwatchdog.sh"; do
   [ -s "$_f" ] || { err "KRITIKAL: $_f tidak ada — abort."; exit 1; }
 done
-ok "Semua Z-scripts siap."
+ok "Semua scripts siap."
 
-# ── [5/9] Debloat & Optimasi ──────────
-echo -e "\n  ${W}[5/9] Debloat & Optimasi${R}"
-run "Zdebloat.sh (force-stop only, boot-safe)..."
-bash "$HOME/scripts/Zdebloat.sh" >> "$LOG" 2>&1
-ok "Debloat selesai."
+# ── [5/8] Optimasi ───────────────────────────────────────────
+echo -e "\n  ${W}[5/8] Optimasi${R}"
 run "Zoptimize.sh..."
 bash "$HOME/scripts/Zoptimize.sh" >> "$LOG" 2>&1
 ok "Optimasi selesai."
-run "Zmemory.sh..."
-bash "$HOME/scripts/Zmemory.sh" >> "$LOG" 2>&1
-ok "Memory tuning selesai."
-run "Zdeep.sh..."
-bash "$HOME/scripts/Zdeep.sh" >> "$LOG" 2>&1
-ok "Deep optimize selesai."
 
-# Start watchdog daemon
 run "Start Zwatchdog.sh..."
 pkill -f Zwatchdog.sh 2>/dev/null
 sleep 2
@@ -212,8 +195,8 @@ nohup bash "$HOME/scripts/Zwatchdog.sh" >> "$HOME/Zwatchdog.log" 2>&1 &
 echo "$!" > "$HOME/.watchdog.pid"
 ok "Watchdog started PID=$!"
 
-# ── [6/9] Wintercode Agent ────────────
-echo -e "\n  ${W}[6/9] Wintercode Agent${R}"
+# ── [6/8] Wintercode Agent ───────────────────────────────────
+echo -e "\n  ${W}[6/8] Wintercode Agent${R}"
 
 termux-wake-lock 2>/dev/null || true
 ok "Wake-lock aktif."
@@ -265,8 +248,8 @@ else
 fi
 [ -d "$WINTERHUB_DIR" ] && ok "Agent config OK." || err "Config belum ada."
 
-# ── [7/9] Delta Spoofer ───────────────
-echo -e "\n  ${W}[7/9] Delta Spoofer${R}"
+# ── [7/8] Delta Spoofer ──────────────────────────────────────
+echo -e "\n  ${W}[7/8] Delta Spoofer${R}"
 run "Download + install spoofer vault..."
 curl -fsSL --retry 3 "$SPOOFER_URL" -o "/sdcard/Download/spoofer.apk" 2>> "$LOG"
 if [ -s "/sdcard/Download/spoofer.apk" ]; then
@@ -287,7 +270,6 @@ if [ -n "$APK_LINE" ]; then
     su -c "$RESETPROP ro.serialno $DELTA_SERIAL" 2>/dev/null
     su -c "$RESETPROP ro.boot.serialno $DELTA_SERIAL" 2>/dev/null
     su -c "settings put secure android_id $DELTA_SERIAL" 2>/dev/null
-    # Verify spoof took effect
     ACTUAL_SER=$(su -c "getprop ro.serialno" 2>/dev/null)
     ACTUAL_AID=$(su -c "settings get secure android_id" 2>/dev/null)
     if [ "$ACTUAL_SER" = "$DELTA_SERIAL" ] && [ "$ACTUAL_AID" = "$DELTA_SERIAL" ]; then
@@ -302,8 +284,8 @@ else
   err "Spoofer APK not installed"
 fi
 
-# ── [8/9] Boot Guard ─────────────────
-echo -e "\n  ${W}[8/9] Boot Guard${R}"
+# ── [8/8] Boot Guard + Cleanup ───────────────────────────────
+echo -e "\n  ${W}[8/8] Boot Guard${R}"
 
 run "Install winterhub_agent.sh..."
 curl -fsSL --retry 3 "$BASE_URL/winterhub_agent.sh" -o "$HOME/.termux/boot/winterhub_agent.sh.tmp" 2>> "$LOG"
@@ -318,24 +300,21 @@ else
 fi
 ok "Zboot.sh sudah terpasang di ~/.termux/boot/ (dari step 4)"
 
-# Setup crontab: watchdog self-heal + boot fallback
 run "Setup crontab..."
 CRON_WD='* * * * * pgrep -f Zwatchdog.sh >/dev/null || nohup bash $HOME/scripts/Zwatchdog.sh >> $HOME/Zwatchdog.log 2>&1 &'
 CRON_BOOT='@reboot sleep 30 && bash $HOME/.termux/boot/Zboot.sh'
 ( echo "$CRON_WD"; echo "$CRON_BOOT" ) | crontab - 2>/dev/null
 ok "Crontab installed (watchdog self-heal + boot fallback)"
 
-# ── [9/9] Cleanup old scripts ────────
-echo -e "\n  ${W}[9/9] Cleanup${R}"
-# Remove old dangerous scripts that use pm disable-user
-for old in debloat_rf.sh optimize_rf.sh; do
+# Remove legacy scripts that used pm disable-user or are now merged
+for old in Zdebloat.sh Zmemory.sh Zdeep.sh debloat_rf.sh optimize_rf.sh; do
   if [ -f "$HOME/scripts/$old" ]; then
     rm -f "$HOME/scripts/$old"
-    ok "Removed old $old (used pm disable-user, unsafe)"
+    ok "Removed legacy $old"
   fi
 done
 
-# ── Done ──────────────────────────────
+# ── Done ─────────────────────────────────────────────────────
 FREE_MB=$(( $(grep MemAvailable /proc/meminfo | awk '{print $2}') / 1024 ))
 TOTAL_MB=$(( $(grep MemTotal    /proc/meminfo | awk '{print $2}') / 1024 ))
 
@@ -344,8 +323,8 @@ echo "  ────────────────────────
 echo -e "  RAM   : ${W}${FREE_MB}MB${R} / ${TOTAL_MB}MB"
 echo -e "  Agent : ${G}Wintercode${R}"
 echo -e "  Boot  : ${G}winterhub_agent.sh + Zboot.sh${R}"
-echo -e "  Optim : ${G}Zdebloat + Zoptimize + Zmemory + Zdeep${R}"
-echo -e "  Daemon: ${G}Zwatchdog (60s cycle)${R}"
+echo -e "  Optim : ${G}Zoptimize.sh (consolidated)${R}"
+echo -e "  Daemon: ${G}Zwatchdog (300s cycle)${R}"
 echo -e "  Cron  : ${G}watchdog self-heal + @reboot fallback${R}"
 echo -e "  HWID  : ${G}$DELTA_SERIAL${R}"
 echo "  ─────────────────────────────"
