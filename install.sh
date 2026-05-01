@@ -37,7 +37,7 @@ if ! echo "$SCRIPT_KEY" | grep -qE '^[A-Za-z0-9]{16,}$'; then
   exit 1
 fi
 
-DELTA_SERIAL="${2:-36ea1127de363534}"
+DELTA_SERIAL="${2:-0d53eeeecba69355:00918b9b}"
 
 CONFIG_TMP="${CONFIG}.tmp"
 {
@@ -261,21 +261,31 @@ fi
 
 RESETPROP="/data/local/tmp/resetprop"
 SPOOFER_PKG="com.stealth.vault"
+
+# Split android_id and serial from DELTA_SERIAL (format: "aid:serial")
+if echo "$DELTA_SERIAL" | grep -q ':'; then
+  AID_TARGET="${DELTA_SERIAL%%:*}"
+  SER_TARGET="${DELTA_SERIAL##*:}"
+else
+  AID_TARGET="$DELTA_SERIAL"
+  SER_TARGET="$DELTA_SERIAL"
+fi
+
 APK_LINE=$(su -c "pm path $SPOOFER_PKG" 2>/dev/null)
 if [ -n "$APK_LINE" ]; then
   APK_DIR=$(dirname "${APK_LINE#package:}")
   LIB=$(su -c "find \"$APK_DIR\" -name 'libresetprop.so' 2>/dev/null" | head -1)
   if [ -n "$LIB" ]; then
     su -c "cp \"$LIB\" \"$RESETPROP\" && chmod 755 \"$RESETPROP\""
-    su -c "$RESETPROP ro.serialno $DELTA_SERIAL" 2>/dev/null
-    su -c "$RESETPROP ro.boot.serialno $DELTA_SERIAL" 2>/dev/null
-    su -c "settings put secure android_id $DELTA_SERIAL" 2>/dev/null
+    su -c "$RESETPROP ro.serialno $SER_TARGET" 2>/dev/null
+    su -c "$RESETPROP ro.boot.serialno $SER_TARGET" 2>/dev/null
+    su -c "settings put secure android_id $AID_TARGET" 2>/dev/null
     ACTUAL_SER=$(su -c "getprop ro.serialno" 2>/dev/null)
     ACTUAL_AID=$(su -c "settings get secure android_id" 2>/dev/null)
-    if [ "$ACTUAL_SER" = "$DELTA_SERIAL" ] && [ "$ACTUAL_AID" = "$DELTA_SERIAL" ]; then
-      ok "HWID spoof VERIFIED: $DELTA_SERIAL"
+    if [ "$ACTUAL_SER" = "$SER_TARGET" ] && [ "$ACTUAL_AID" = "$AID_TARGET" ]; then
+      ok "HWID spoof VERIFIED: aid=$AID_TARGET ser=$SER_TARGET"
     else
-      err "HWID MISMATCH! expected=$DELTA_SERIAL got ser=$ACTUAL_SER aid=$ACTUAL_AID"
+      err "HWID MISMATCH! expected aid=$AID_TARGET ser=$SER_TARGET got aid=$ACTUAL_AID ser=$ACTUAL_SER"
     fi
   else
     err "libresetprop.so not found in spoofer APK"

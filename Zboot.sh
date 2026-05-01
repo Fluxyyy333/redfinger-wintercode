@@ -41,20 +41,30 @@ else
 fi
 
 # ── HWID Spoof ────────────────────────────────────────────────
-DELTA_SERIAL="36ea1127de363534"
+# Format: DELTA_SERIAL="android_id:serial" (colon-separated)
+DELTA_SERIAL="0d53eeeecba69355:00918b9b"
 if [ -f "$CONFIG" ]; then
-    CFG_SERIAL=$(grep '^DELTA_SERIAL=' "$CONFIG" | head -1 | cut -d'=' -f2 | tr -d '[:space:]')
+    CFG_SERIAL=$(grep '^DELTA_SERIAL=' "$CONFIG" | head -1 | cut -d'=' -f2- | tr -d '[:space:]')
     [ -n "$CFG_SERIAL" ] && DELTA_SERIAL="$CFG_SERIAL"
 fi
 
-su -c "settings put secure android_id $DELTA_SERIAL" 2>/dev/null
-log "[hwid] android_id set: $DELTA_SERIAL"
+# Split android_id and serial
+if echo "$DELTA_SERIAL" | grep -q ':'; then
+    AID_TARGET="${DELTA_SERIAL%%:*}"
+    SER_TARGET="${DELTA_SERIAL##*:}"
+else
+    AID_TARGET="$DELTA_SERIAL"
+    SER_TARGET="$DELTA_SERIAL"
+fi
+
+su -c "settings put secure android_id $AID_TARGET" 2>/dev/null
+log "[hwid] android_id set: $AID_TARGET"
 
 RESETPROP="/data/local/tmp/resetprop"
 if [ -x "$RESETPROP" ]; then
-    su -c "$RESETPROP ro.serialno $DELTA_SERIAL" 2>/dev/null
-    su -c "$RESETPROP ro.boot.serialno $DELTA_SERIAL" 2>/dev/null
-    log "[hwid] resetprop applied"
+    su -c "$RESETPROP ro.serialno $SER_TARGET" 2>/dev/null
+    su -c "$RESETPROP ro.boot.serialno $SER_TARGET" 2>/dev/null
+    log "[hwid] resetprop applied: serial=$SER_TARGET"
 else
     SPOOFER_PKG="com.stealth.vault"
     APK_LINE=$(su -c "pm path $SPOOFER_PKG" 2>/dev/null)
@@ -63,19 +73,19 @@ else
         LIB=$(su -c "find \"$APK_DIR\" -name 'libresetprop.so' 2>/dev/null" | head -1)
         if [ -n "$LIB" ]; then
             su -c "cp \"$LIB\" \"$RESETPROP\" && chmod 755 \"$RESETPROP\""
-            su -c "$RESETPROP ro.serialno $DELTA_SERIAL" 2>/dev/null
-            su -c "$RESETPROP ro.boot.serialno $DELTA_SERIAL" 2>/dev/null
-            log "[hwid] resetprop re-extracted + applied"
+            su -c "$RESETPROP ro.serialno $SER_TARGET" 2>/dev/null
+            su -c "$RESETPROP ro.boot.serialno $SER_TARGET" 2>/dev/null
+            log "[hwid] resetprop re-extracted + applied: serial=$SER_TARGET"
         fi
     fi
 fi
 
 ACTUAL_AID=$(su -c 'settings get secure android_id' 2>/dev/null)
 ACTUAL_SER=$(su -c 'getprop ro.serialno' 2>/dev/null)
-if [ "$ACTUAL_AID" = "$DELTA_SERIAL" ] && [ "$ACTUAL_SER" = "$DELTA_SERIAL" ]; then
-    log "[hwid] VERIFIED OK"
+if [ "$ACTUAL_AID" = "$AID_TARGET" ] && [ "$ACTUAL_SER" = "$SER_TARGET" ]; then
+    log "[hwid] VERIFIED OK: aid=$ACTUAL_AID ser=$ACTUAL_SER"
 else
-    log "[hwid] MISMATCH! expected=$DELTA_SERIAL got aid=$ACTUAL_AID ser=$ACTUAL_SER"
+    log "[hwid] MISMATCH! expected aid=$AID_TARGET ser=$SER_TARGET got aid=$ACTUAL_AID ser=$ACTUAL_SER"
 fi
 
 # ── Download Latest Scripts ───────────────────────────────────
