@@ -153,7 +153,7 @@ fi
 echo -e "\n  ${W}[4/8] Download Scripts${R}"
 mkdir -p "$HOME/scripts" "$HOME/.termux/boot"
 
-for f in Zoptimize.sh Zwatchdog.sh delta_setup.sh; do
+for f in Zoptimize.sh delta_setup.sh; do
   run "Download scripts/$f..."
   curl -fsSL --retry 3 "$BASE_URL/scripts/$f" -o "$HOME/scripts/$f.tmp" 2>> "$LOG"
   if [ -s "$HOME/scripts/$f.tmp" ] && head -1 "$HOME/scripts/$f.tmp" | grep -q '^#!'; then
@@ -177,9 +177,7 @@ else
   err "GAGAL: Zboot.sh"
 fi
 
-for _f in "$HOME/scripts/Zoptimize.sh" "$HOME/scripts/Zwatchdog.sh"; do
-  [ -s "$_f" ] || { err "KRITIKAL: $_f tidak ada — abort."; exit 1; }
-done
+[ -s "$HOME/scripts/Zoptimize.sh" ] || { err "KRITIKAL: Zoptimize.sh tidak ada — abort."; exit 1; }
 ok "Semua scripts siap."
 
 # ── [5/8] Optimasi ───────────────────────────────────────────
@@ -187,13 +185,6 @@ echo -e "\n  ${W}[5/8] Optimasi${R}"
 run "Zoptimize.sh..."
 bash "$HOME/scripts/Zoptimize.sh" >> "$LOG" 2>&1
 ok "Optimasi selesai."
-
-run "Start Zwatchdog.sh..."
-pkill -f Zwatchdog.sh 2>/dev/null
-sleep 2
-nohup bash "$HOME/scripts/Zwatchdog.sh" >> "$HOME/Zwatchdog.log" 2>&1 &
-echo "$!" > "$HOME/.watchdog.pid"
-ok "Watchdog started PID=$!"
 
 # ── [6/8] Wintercode Agent ───────────────────────────────────
 echo -e "\n  ${W}[6/8] Wintercode Agent${R}"
@@ -311,13 +302,12 @@ fi
 ok "Zboot.sh sudah terpasang di ~/.termux/boot/ (dari step 4)"
 
 run "Setup crontab..."
-CRON_WD='* * * * * pgrep -f Zwatchdog.sh >/dev/null || nohup bash $HOME/scripts/Zwatchdog.sh >> $HOME/Zwatchdog.log 2>&1 &'
 CRON_BOOT='@reboot sleep 30 && bash $HOME/.termux/boot/Zboot.sh'
-( echo "$CRON_WD"; echo "$CRON_BOOT" ) | crontab - 2>/dev/null
-ok "Crontab installed (watchdog self-heal + boot fallback)"
+( crontab -l 2>/dev/null | grep -v 'Zwatchdog.sh' | grep -v 'Zboot.sh'; echo "$CRON_BOOT" ) | crontab - 2>/dev/null
+ok "Crontab installed (boot fallback)"
 
 # Remove legacy scripts that used pm disable-user or are now merged
-for old in Zdebloat.sh Zmemory.sh Zdeep.sh debloat_rf.sh optimize_rf.sh; do
+for old in Zdebloat.sh Zmemory.sh Zdeep.sh debloat_rf.sh optimize_rf.sh Zwatchdog.sh; do
   if [ -f "$HOME/scripts/$old" ]; then
     rm -f "$HOME/scripts/$old"
     ok "Removed legacy $old"
@@ -333,9 +323,8 @@ echo "  ────────────────────────
 echo -e "  RAM   : ${W}${FREE_MB}MB${R} / ${TOTAL_MB}MB"
 echo -e "  Agent : ${G}Wintercode${R}"
 echo -e "  Boot  : ${G}winterhub_agent.sh + Zboot.sh${R}"
-echo -e "  Optim : ${G}Zoptimize.sh (consolidated)${R}"
-echo -e "  Daemon: ${G}Zwatchdog (300s cycle)${R}"
-echo -e "  Cron  : ${G}watchdog self-heal + @reboot fallback${R}"
+echo -e "  Optim : ${G}Zoptimize.sh (minimal)${R}"
+echo -e "  Cron  : ${G}@reboot fallback${R}"
 echo -e "  HWID  : ${G}$DELTA_SERIAL${R}"
 echo "  ─────────────────────────────"
 echo "  Restart Redfinger untuk"

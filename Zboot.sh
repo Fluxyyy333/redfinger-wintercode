@@ -94,7 +94,7 @@ log "[boot] stagger delay: ${RAND_DELAY}s"
 sleep $RAND_DELAY
 
 mkdir -p "$HOME/scripts"
-for f in Zoptimize.sh Zwatchdog.sh delta_setup.sh; do
+for f in Zoptimize.sh delta_setup.sh; do
     curl -sL --max-time 15 "$BASE_URL/scripts/$f" -o "$HOME/scripts/$f.tmp" 2>/dev/null
     if [ -s "$HOME/scripts/$f.tmp" ] && head -1 "$HOME/scripts/$f.tmp" | grep -q '^#!'; then
         mv "$HOME/scripts/$f.tmp" "$HOME/scripts/$f"
@@ -106,7 +106,7 @@ for f in Zoptimize.sh Zwatchdog.sh delta_setup.sh; do
 done
 
 # ── Cleanup legacy scripts on device ─────────────────────────
-for old in Zdebloat.sh Zmemory.sh Zdeep.sh debloat_rf.sh optimize_rf.sh; do
+for old in Zdebloat.sh Zmemory.sh Zdeep.sh debloat_rf.sh optimize_rf.sh Zwatchdog.sh; do
     [ -f "$HOME/scripts/$old" ] && rm -f "$HOME/scripts/$old" && log "[boot] removed legacy $old"
 done
 
@@ -114,18 +114,9 @@ done
 bash "$HOME/scripts/Zoptimize.sh" >> "$LOG" 2>&1
 log "[boot] optimize done"
 
-# ── Start Watchdog ────────────────────────────────────────────
-pkill -f Zwatchdog.sh 2>/dev/null
-sleep 2
-nohup bash "$HOME/scripts/Zwatchdog.sh" >> "$HOME/Zwatchdog.log" 2>&1 &
-WD_PID=$!
-echo "$WD_PID" > "$HOME/.watchdog.pid"
-log "[boot] watchdog started PID=$WD_PID"
-
-# ── Crontab: watchdog self-heal + boot fallback ──────────────
-CRON_WD='* * * * * pgrep -f Zwatchdog.sh >/dev/null || nohup bash $HOME/scripts/Zwatchdog.sh >> $HOME/Zwatchdog.log 2>&1 &'
+# ── Crontab: boot fallback ───────────────────────────────────
 CRON_BOOT='@reboot sleep 30 && bash $HOME/.termux/boot/Zboot.sh'
-( crontab -l 2>/dev/null | grep -v 'Zwatchdog.sh' | grep -v 'Zboot.sh'; echo "$CRON_WD"; echo "$CRON_BOOT" ) | crontab - 2>/dev/null
+( crontab -l 2>/dev/null | grep -v 'Zwatchdog.sh' | grep -v 'Zboot.sh'; echo "$CRON_BOOT" ) | crontab - 2>/dev/null
 log "[boot] crontab installed"
 
 FREE_MB=$(( $(grep MemAvailable /proc/meminfo | awk '{print $2}') / 1024 ))
