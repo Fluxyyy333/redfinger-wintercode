@@ -9,19 +9,29 @@ echo "── ZOPTIMIZE $(date) ──" >> "$LOG"
 
 su -c "id" > /dev/null 2>&1 || { echo "[!] ROOT GAGAL" >> "$LOG"; exit 1; }
 
+SKIP_DPI=0
+grep -q '^SKIP_DPI=1' "$HOME/.rf_config" 2>/dev/null && SKIP_DPI=1
+
 M_BEFORE=$(( $(grep MemAvailable /proc/meminfo | awk '{print $2}') / 1024 ))
 
 # ── [1/2] Resolution & Display ───────────────────────────────
-if ! grep -q "ORIG_SIZE" "$HOME/.rf_config" 2>/dev/null; then
-    echo "ORIG_SIZE=$(su -c 'wm size' | awk '{print $3}')"   >> "$HOME/.rf_config"
-    echo "ORIG_DPI=$(su -c 'wm density' | awk '{print $3}')" >> "$HOME/.rf_config"
+if [ "$SKIP_DPI" = "1" ]; then
+    su -c "settings put global window_animation_scale 0.0"
+    su -c "settings put global transition_animation_scale 0.0"
+    su -c "settings put global animator_duration_scale 0.0"
+    echo "[+] 1/2 DPI skip (--no-dpi), animasi OFF only" >> "$LOG"
+else
+    if ! grep -q "ORIG_SIZE" "$HOME/.rf_config" 2>/dev/null; then
+        echo "ORIG_SIZE=$(su -c 'wm size' | awk '{print $3}')"   >> "$HOME/.rf_config"
+        echo "ORIG_DPI=$(su -c 'wm density' | awk '{print $3}')" >> "$HOME/.rf_config"
+    fi
+    su -c "wm size 640x360"
+    su -c "wm density 120"
+    su -c "settings put global window_animation_scale 0.0"
+    su -c "settings put global transition_animation_scale 0.0"
+    su -c "settings put global animator_duration_scale 0.0"
+    echo "[+] 1/2 Resolusi 640x360 @120dpi, animasi OFF" >> "$LOG"
 fi
-su -c "wm size 640x360"
-su -c "wm density 120"
-su -c "settings put global window_animation_scale 0.0"
-su -c "settings put global transition_animation_scale 0.0"
-su -c "settings put global animator_duration_scale 0.0"
-echo "[+] 1/2 Resolusi 640x360 @120dpi, animasi OFF" >> "$LOG"
 
 # ── [2/2] Overlay Policy (KRITIS untuk Delta) ────────────────
 su -c "settings put global disable_overlays 0"

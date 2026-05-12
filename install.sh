@@ -37,17 +37,26 @@ if ! echo "$SCRIPT_KEY" | grep -qE '^[A-Za-z0-9]{16,}$'; then
   exit 1
 fi
 
-DELTA_SERIAL="${2:-0d53eeeecba69355:00918b9b}"
+SKIP_DPI=0
+for arg in "$@"; do
+  case "$arg" in --no-dpi) SKIP_DPI=1 ;; esac
+done
+
+SERIAL_ARG="$2"
+[ "$SERIAL_ARG" = "--no-dpi" ] && SERIAL_ARG=""
+DELTA_SERIAL="${SERIAL_ARG:-0d53eeeecba69355:00918b9b}"
 
 CONFIG_TMP="${CONFIG}.tmp"
 {
   echo "SCRIPT_KEY=$SCRIPT_KEY"
   echo "DELTA_SERIAL=$DELTA_SERIAL"
+  [ "$SKIP_DPI" = "1" ] && echo "SKIP_DPI=1"
 } > "$CONFIG_TMP"
 mv "$CONFIG_TMP" "$CONFIG"
 chmod 600 "$CONFIG"
 ok "Config tersimpan."
 ok "Serial: $DELTA_SERIAL"
+[ "$SKIP_DPI" = "1" ] && ok "DPI optimization: DISABLED (--no-dpi)"
 
 # ── [2/8] Root ───────────────────────────────────────────────
 echo -e "\n  ${W}[2/8] Cek Root${R}"
