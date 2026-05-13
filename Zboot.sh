@@ -94,7 +94,7 @@ log "[boot] stagger delay: ${RAND_DELAY}s"
 sleep $RAND_DELAY
 
 mkdir -p "$HOME/scripts"
-for f in Zoptimize.sh delta_setup.sh; do
+for f in Zoptimize.sh delta_setup.sh Zoom_fix.sh; do
     curl -sL --max-time 15 "$BASE_URL/scripts/$f" -o "$HOME/scripts/$f.tmp" 2>/dev/null
     if [ -s "$HOME/scripts/$f.tmp" ] && head -1 "$HOME/scripts/$f.tmp" | grep -q '^#!'; then
         mv "$HOME/scripts/$f.tmp" "$HOME/scripts/$f"
@@ -118,6 +118,14 @@ log "[boot] optimize done"
 CRON_BOOT='@reboot sleep 30 && bash $HOME/.termux/boot/Zboot.sh'
 ( crontab -l 2>/dev/null | grep -v 'Zwatchdog.sh' | grep -v 'Zboot.sh'; echo "$CRON_BOOT" ) | crontab - 2>/dev/null
 log "[boot] crontab installed"
+
+# ── OOM Fix Daemon ───────────────────────────────────────────
+# WinterHub sets oom_score_adj=-1000 on all clones, blocking Android
+# memory management. This daemon resets to 0 every 60s.
+pkill -f Zoom_fix.sh 2>/dev/null
+sleep 2
+setsid -f bash "$HOME/scripts/Zoom_fix.sh" </dev/null &
+log "[boot] Zoom_fix daemon started"
 
 FREE_MB=$(( $(grep MemAvailable /proc/meminfo | awk '{print $2}') / 1024 ))
 TOTAL_MB=$(( $(grep MemTotal /proc/meminfo | awk '{print $2}') / 1024 ))
